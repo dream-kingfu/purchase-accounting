@@ -348,7 +348,12 @@
                 </div>
 
                 <div class="form-group">
-                    <label>成本价 (¥)</label>
+                    <label>件数</label>
+                    <input type="number" id="quantity" value="1" min="1" step="1">
+                </div>
+
+                <div class="form-group">
+                    <label>单件成本价 (¥)</label>
                     <input type="number" id="costPrice" placeholder="0.00" step="0.01" min="0">
                 </div>
 
@@ -358,7 +363,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>售出价 <span style="color: #999; font-weight: normal;">(可选)</span></label>
+                    <label>单件售出价 <span style="color: #999; font-weight: normal;">(可选)</span></label>
                     <input type="number" id="sellPrice" placeholder="待填写" step="0.01" min="0">
                 </div>
 
@@ -370,7 +375,7 @@
                 <button class="btn btn-primary" onclick="addRecord()">添加记录</button>
             </div>
 
-            <!-- 快速统计卡片 + 编辑模态框 -->
+            <!-- 数据统计 + 编辑模态框 -->
             <div class="card">
                 <h2>📈 数据统计</h2>
 
@@ -408,7 +413,11 @@
                                 <input type="text" id="editGoodsDesc">
                             </div>
                             <div class="form-group form-group-modal">
-                                <label>成本价 (¥)</label>
+                                <label>件数</label>
+                                <input type="number" id="editQuantity" min="1" step="1">
+                            </div>
+                            <div class="form-group form-group-modal">
+                                <label>单件成本价 (¥)</label>
                                 <input type="number" id="editCostPrice" step="0.01" min="0">
                             </div>
                             <div class="form-group form-group-modal">
@@ -416,7 +425,7 @@
                                 <input type="date" id="editSellDate">
                             </div>
                             <div class="form-group form-group-modal">
-                                <label>售出价 (¥)</label>
+                                <label>单件售出价 (¥)</label>
                                 <input type="number" id="editSellPrice" step="0.01" min="0">
                             </div>
                             <div class="form-group form-group-modal">
@@ -434,25 +443,28 @@
 
                 <!-- 统计数字 -->
                 <div style="padding: 20px 0;">
-                    <div style="margin-bottom: 25px;">
+                    <div style="margin-bottom: 20px;">
                         <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总交易笔数</div>
                         <div style="font-size: 28px; font-weight: 700; color: #667eea;" id="totalCount">0</div>
                     </div>
-                    <div style="margin-bottom: 25px;">
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总件数</div>
+                        <div style="font-size: 28px; font-weight: 700; color: #667eea;" id="totalQuantity">0</div>
+                    </div>
+                    <div style="margin-bottom: 20px;">
                         <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总成本</div>
                         <div style="font-size: 28px; font-weight: 700; color: #333;" id="totalCost">¥0.00</div>
                     </div>
-                    <div style="margin-bottom: 25px;">
+                    <div style="margin-bottom: 20px;">
                         <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总收益</div>
                         <div style="font-size: 28px; font-weight: 700; color: #22c55e;" id="totalRevenue">¥0.00</div>
                     </div>
-                    <div style="margin-bottom: 25px;">
-                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总利润</div>
-                        <div style="font-size: 28px; font-weight: 700; color: #667eea;" id="totalProfit">¥0.00</div>
-                    </div>
                     <div>
-                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">平均利润率</div>
-                        <div style="font-size: 28px; font-weight: 700; color: #764ba2;" id="avgProfitRate">0%</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总利润 / 平均利润率</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #764ba2;">
+                            <span id="totalProfit">¥0.00</span>
+                            <span style="margin-left: 8px;" id="avgProfitRate">0%</span>
+                        </div>
                     </div>
                 </div>
                 
@@ -474,9 +486,12 @@
                                 <th>平台</th>
                                 <th>货号</th>
                                 <th>商品描述</th>
-                                <th>成本价</th>
+                                <th>件数</th>
+                                <th>单件成本</th>
+                                <th>总成本</th>
                                 <th>出售日期</th>
-                                <th>售出价</th>
+                                <th>单件售出价</th>
+                                <th>总售出价</th>
                                 <th>利润</th>
                                 <th>利润率</th>
                                 <th style="width: 120px;">操作</th>
@@ -484,7 +499,7 @@
                         </thead>
                         <tbody id="tableBody">
                             <tr class="empty-state">
-                                <td colspan="11">暂无数据，添加第一条记录吧 👆</td>
+                                <td colspan="14">暂无数据，添加第一条记录吧 👆</td>
                             </tr>
                         </tbody>
                     </table>
@@ -498,7 +513,7 @@
         document.getElementById('buyDate').valueAsDate = new Date();
         document.getElementById('sellDate').valueAsDate = new Date();
 
-        // 本地存储
+        // 从本地存储加载数据
         let records = JSON.parse(localStorage.getItem('purchaseRecords')) || [];
         let editingRecordId = null;
 
@@ -511,6 +526,7 @@
                 document.getElementById('editBuyPlatform').value = record.buyPlatform;
                 document.getElementById('editGoodsCode').value = record.goodsCode;
                 document.getElementById('editGoodsDesc').value = record.goodsDesc;
+                document.getElementById('editQuantity').value = record.quantity;
                 document.getElementById('editCostPrice').value = record.costPrice;
                 document.getElementById('editSellDate').value = record.sellDate;
                 document.getElementById('editSellPrice').value = record.sellPrice;
@@ -528,23 +544,26 @@
         function saveRecord() {
             if (editingRecordId === null) return;
             
+            const quantity = parseInt(document.getElementById('editQuantity').value, 10) || 0;
             const costPrice = parseFloat(document.getElementById('editCostPrice').value) || 0;
             const sellPrice = document.getElementById('editSellPrice').value;
-            
-            if (!costPrice) {
-                alert('请填写成本价');
+
+            if (!quantity || !costPrice) {
+                alert('请填写件数和成本价');
                 return;
             }
-            
+
             let profit = '';
             let profitRate = '';
-            
+
             if (sellPrice !== '') {
                 const sellPriceNum = parseFloat(sellPrice);
-                profit = (sellPriceNum - costPrice).toFixed(2);
-                profitRate = costPrice > 0 ? ((profit / costPrice) * 100).toFixed(2) : 0;
+                const totalCost = costPrice * quantity;
+                const totalSell = sellPriceNum * quantity;
+                profit = (totalSell - totalCost).toFixed(2);
+                profitRate = totalCost > 0 ? ((profit / totalCost) * 100).toFixed(2) : 0;
             }
-            
+
             const recordIndex = records.findIndex(r => r.id === editingRecordId);
             if (recordIndex !== -1) {
                 records[recordIndex] = {
@@ -553,6 +572,7 @@
                     buyPlatform: document.getElementById('editBuyPlatform').value,
                     goodsCode: document.getElementById('editGoodsCode').value,
                     goodsDesc: document.getElementById('editGoodsDesc').value,
+                    quantity,
                     costPrice: costPrice.toFixed(2),
                     sellDate: document.getElementById('editSellDate').value,
                     sellPrice: sellPrice === '' ? '' : parseFloat(sellPrice).toFixed(2),
@@ -560,11 +580,11 @@
                     profitRate: profitRate,
                     remark: document.getElementById('editRemark').value
                 };
-                
+
                 saveData();
                 renderTable();
                 closeEditModal();
-                
+
                 const msg = document.getElementById('successMsg');
                 msg.textContent = '✓ 记录已更新';
                 msg.classList.add('show');
@@ -581,23 +601,26 @@
             const buyPlatform = document.getElementById('buyPlatform').value;
             const goodsCode = document.getElementById('goodsCode').value;
             const goodsDesc = document.getElementById('goodsDesc').value;
+            const quantity = parseInt(document.getElementById('quantity').value, 10) || 0;
             const costPrice = parseFloat(document.getElementById('costPrice').value) || 0;
             const sellDate = document.getElementById('sellDate').value;
             const sellPrice = document.getElementById('sellPrice').value;
             const remark = document.getElementById('remark').value;
 
-            if (!buyDate || !buyPlatform || !costPrice) {
-                alert('请填写必要信息：购买日期、平台、成本价\n售出价可稍后添加');
+            if (!buyDate || !buyPlatform || !quantity || !costPrice) {
+                alert('请填写必要信息：购买日期、平台、件数、成本价\n售出价可稍后添加');
                 return;
             }
 
             let profit = '';
             let profitRate = '';
-            
+
             if (sellPrice !== '') {
                 const sellPriceNum = parseFloat(sellPrice);
-                profit = (sellPriceNum - costPrice).toFixed(2);
-                profitRate = costPrice > 0 ? ((profit / costPrice) * 100).toFixed(2) : 0;
+                const totalCost = costPrice * quantity;
+                const totalSell = sellPriceNum * quantity;
+                profit = (totalSell - totalCost).toFixed(2);
+                profitRate = totalCost > 0 ? ((profit / totalCost) * 100).toFixed(2) : 0;
             }
 
             const record = {
@@ -606,6 +629,7 @@
                 buyPlatform,
                 goodsCode,
                 goodsDesc,
+                quantity,
                 costPrice: costPrice.toFixed(2),
                 sellDate,
                 sellPrice: sellPrice === '' ? '' : parseFloat(sellPrice).toFixed(2),
@@ -617,12 +641,13 @@
             records.push(record);
             saveData();
             renderTable();
-            
+
             // 清空表单
             document.getElementById('buyDate').valueAsDate = new Date();
             document.getElementById('buyPlatform').value = '';
             document.getElementById('goodsCode').value = '';
             document.getElementById('goodsDesc').value = '';
+            document.getElementById('quantity').value = 1;
             document.getElementById('costPrice').value = '';
             document.getElementById('sellDate').valueAsDate = new Date();
             document.getElementById('sellPrice').value = '';
@@ -630,6 +655,7 @@
 
             // 显示成功消息
             const msg = document.getElementById('successMsg');
+            msg.textContent = '✓ 记录已添加';
             msg.classList.add('show');
             setTimeout(() => msg.classList.remove('show'), 2000);
         }
@@ -646,7 +672,7 @@
             const tbody = document.getElementById('tableBody');
             
             if (records.length === 0) {
-                tbody.innerHTML = '<tr class="empty-state"><td colspan="11">暂无数据，添加第一条记录吧 👆</td></tr>';
+                tbody.innerHTML = '<tr class="empty-state"><td colspan="14">暂无数据，添加第一条记录吧 👆</td></tr>';
                 updateStats();
                 return;
             }
@@ -657,6 +683,9 @@
                 const profitRateDisplay = record.profitRate === '' ? '待定' : `${record.profitRate}%`;
                 const sellDateDisplay = record.sellDate === '' ? '-' : record.sellDate;
                 const sellPriceDisplay = record.sellPrice === '' ? '-' : `¥${parseFloat(record.sellPrice).toFixed(2)}`;
+                const totalCost = (parseFloat(record.costPrice) * record.quantity).toFixed(2);
+                const totalSell = record.sellPrice === '' ? '-' : `¥${(parseFloat(record.sellPrice) * record.quantity).toFixed(2)}`;
+
                 return `
                     <tr>
                         <td>${index + 1}</td>
@@ -664,9 +693,12 @@
                         <td>${record.buyPlatform}</td>
                         <td>${record.goodsCode}</td>
                         <td>${record.goodsDesc}</td>
+                        <td>${record.quantity}</td>
                         <td>¥${parseFloat(record.costPrice).toFixed(2)}</td>
+                        <td>¥${totalCost}</td>
                         <td>${sellDateDisplay}</td>
                         <td>${sellPriceDisplay}</td>
+                        <td>${totalSell}</td>
                         <td class="${profitClass}">${profitDisplay}</td>
                         <td class="${profitClass}">${profitRateDisplay}</td>
                         <td style="display: flex; gap: 5px;">
@@ -682,12 +714,17 @@
 
         function updateStats() {
             const totalCount = records.length;
-            const totalCost = records.reduce((sum, r) => sum + parseFloat(r.costPrice), 0);
-            const totalRevenue = records.reduce((sum, r) => sum + (r.sellPrice === '' ? 0 : parseFloat(r.sellPrice)), 0);
+            const totalQuantity = records.reduce((sum, r) => sum + (r.quantity || 0), 0);
+            const totalCost = records.reduce((sum, r) => sum + (parseFloat(r.costPrice) * (r.quantity || 0)), 0);
+            const totalRevenue = records.reduce((sum, r) => {
+                if (r.sellPrice === '') return sum;
+                return sum + (parseFloat(r.sellPrice) * (r.quantity || 0));
+            }, 0);
             const totalProfit = totalRevenue - totalCost;
             const avgProfitRate = totalCost > 0 ? ((totalProfit / totalCost) * 100).toFixed(2) : 0;
 
             document.getElementById('totalCount').textContent = totalCount;
+            document.getElementById('totalQuantity').textContent = totalQuantity;
             document.getElementById('totalCost').textContent = '¥' + totalCost.toFixed(2);
             document.getElementById('totalRevenue').textContent = '¥' + totalRevenue.toFixed(2);
             document.getElementById('totalProfit').textContent = '¥' + totalProfit.toFixed(2);
@@ -704,10 +741,12 @@
                 return;
             }
 
-            let csv = '序号,购买日期,购买平台,货号,商品描述,成本价,出售日期,售出价,利润,利润率,备注\n';
+            let csv = '序号,购买日期,购买平台,货号,商品描述,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
             
             records.forEach((record, index) => {
-                csv += `${index + 1},"${record.buyDate}","${record.buyPlatform}","${record.goodsCode}","${record.goodsDesc}",${record.costPrice},"${record.sellDate}",${record.sellPrice},${record.profit},${record.profitRate}%,"${record.remark}"\n`;
+                const totalCost = (parseFloat(record.costPrice) * record.quantity).toFixed(2);
+                const totalSell = record.sellPrice === '' ? '' : (parseFloat(record.sellPrice) * record.quantity).toFixed(2);
+                csv += `${index + 1},"${record.buyDate}","${record.buyPlatform}","${record.goodsCode}","${record.goodsDesc}",${record.quantity},${record.costPrice},${totalCost},"${record.sellDate}",${record.sellPrice},${totalSell},${record.profit},${record.profitRate}%,"${record.remark}"\n`;
             });
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -732,3 +771,4 @@
     </script>
 </body>
 </html>
+
