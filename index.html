@@ -509,12 +509,59 @@
     </div>
 
     <script>
+        // 数据规范化：兼容旧版本结构，保证 quantity 等字段存在
+        function normalizeRecords(rawRecords) {
+            if (!Array.isArray(rawRecords)) return [];
+
+            return rawRecords.map(r => {
+                const record = { ...r };
+
+                // 旧记录可能没有 quantity，默认 1
+                if (!record.quantity || record.quantity <= 0) {
+                    record.quantity = 1;
+                }
+
+                // 确保这些字段存在
+                if (record.costPrice === undefined || record.costPrice === null || record.costPrice === '') {
+                    record.costPrice = '0.00';
+                }
+                if (record.sellPrice === undefined || record.sellPrice === null) {
+                    record.sellPrice = '';
+                }
+                if (!record.goodsCode) record.goodsCode = '';
+                if (!record.goodsDesc) record.goodsDesc = '';
+                if (!record.buyPlatform) record.buyPlatform = '';
+                if (!record.buyDate) record.buyDate = '';
+                if (!record.sellDate) record.sellDate = '';
+                if (!record.remark) record.remark = '';
+
+                // 旧数据中 profitRate 可能带 %，统一去掉
+                if (typeof record.profitRate === 'string' && record.profitRate.endsWith('%')) {
+                    record.profitRate = record.profitRate.replace('%', '');
+                }
+
+                const cost = parseFloat(record.costPrice) || 0;
+                const sell = record.sellPrice === '' ? NaN : parseFloat(record.sellPrice);
+
+                // 如果没有 profit，但有价格信息，则按当前规则计算
+                if ((record.profit === undefined || record.profit === null || record.profit === '') && !isNaN(sell)) {
+                    const totalCost = cost * record.quantity;
+                    const totalSell = sell * record.quantity;
+                    const p = totalSell - totalCost;
+                    record.profit = p.toFixed(2);
+                    record.profitRate = totalCost > 0 ? ((p / totalCost) * 100).toFixed(2) : '';
+                }
+
+                return record;
+            });
+        }
+
         // 初始化日期为今天
         document.getElementById('buyDate').valueAsDate = new Date();
         document.getElementById('sellDate').valueAsDate = new Date();
 
-        // 从本地存储加载数据
-        let records = JSON.parse(localStorage.getItem('purchaseRecords')) || [];
+        // 从本地存储加载并规范化数据
+        let records = normalizeRecords(JSON.parse(localStorage.getItem('purchaseRecords')) || []);
         let editingRecordId = null;
 
         function openEditModal(id) {
@@ -680,11 +727,13 @@
             tbody.innerHTML = records.map((record, index) => {
                 const profitClass = record.profit === '' ? '' : (record.profit >= 0 ? 'profit-positive' : 'profit-negative');
                 const profitDisplay = record.profit === '' ? '待定' : `¥${record.profit}`;
-                const profitRateDisplay = record.profitRate === '' ? '待定' : `${record.profitRate}%`;
+                const rateText = record.profitRate === '' || record.profitRate === undefined || record.profitRate === null
+                    ? '待定'
+                    : `${record.profitRate}%`;
                 const sellDateDisplay = record.sellDate === '' ? '-' : record.sellDate;
                 const sellPriceDisplay = record.sellPrice === '' ? '-' : `¥${parseFloat(record.sellPrice).toFixed(2)}`;
-                const totalCost = (parseFloat(record.costPrice) * record.quantity).toFixed(2);
-                const totalSell = record.sellPrice === '' ? '-' : `¥${(parseFloat(record.sellPrice) * record.quantity).toFixed(2)}`;
+                const totalCost = (parseFloat(record.costPrice) * (record.quantity || 0)).toFixed(2);
+                const totalSell = record.sellPrice === '' ? '-' : `¥${(parseFloat(record.sellPrice) * (record.quantity || 0)).toFixed(2)}`;
 
                 return `
                     <tr>
@@ -700,7 +749,7 @@
                         <td>${sellPriceDisplay}</td>
                         <td>${totalSell}</td>
                         <td class="${profitClass}">${profitDisplay}</td>
-                        <td class="${profitClass}">${profitRateDisplay}</td>
+                        <td class="${profitClass}">${rateText}</td>
                         <td style="display: flex; gap: 5px;">
                             <button class="btn btn-danger" style="flex: 1; padding: 6px 8px; font-size: 11px;" onclick="editRecord(${record.id})">编辑</button>
                             <button class="btn btn-danger" style="flex: 1; padding: 6px 8px; font-size: 11px; background: #ff6b6b;" onclick="deleteRecord(${record.id})">删除</button>
@@ -744,9 +793,12 @@
             let csv = '序号,购买日期,购买平台,货号,商品描述,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
             
             records.forEach((record, index) => {
-                const totalCost = (parseFloat(record.costPrice) * record.quantity).toFixed(2);
-                const totalSell = record.sellPrice === '' ? '' : (parseFloat(record.sellPrice) * record.quantity).toFixed(2);
-                csv += `${index + 1},"${record.buyDate}","${record.buyPlatform}","${record.goodsCode}","${record.goodsDesc}",${record.quantity},${record.costPrice},${totalCost},"${record.sellDate}",${record.sellPrice},${totalSell},${record.profit},${record.profitRate}%,"${record.remark}"\n`;
+                const totalCost = (parseFloat(record.costPrice) * (record.quantity || 0)).toFixed(2);
+                const totalSell = record.sellPrice === '' ? '' : (parseFloat(record.sellPrice) * (record.quantity || 0)).toFixed(2);
+                const rate = record.profitRate === '' || record.profitRate === undefined || record.profitRate === null
+                    ? ''
+                    : record.profitRate;
+                csv += `${index + 1},"${record.buyDate}","${record.buyPlatform}","${record.goodsCode}","${record.goodsDesc}",${record.quantity},${record.costPrice},${totalCost},"${record.sellDate}",${record.sellPrice},${totalSell},${record.profit},${rate}%,"${record.remark}"\n`;
             });
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -771,4 +823,3 @@
     </script>
 </body>
 </html>
-
