@@ -292,5 +292,411 @@
         <button class="modal-close" onclick="closeEditModal()">×</button>
         <div class="modal-header">编辑记录</div>
 
-        <div class="
+        <div class="modal-body">
+          <div class="form-group">
+            <label>购买日期</label>
+            <input type="date" id="editBuyDate" />
+          </div>
+          <div class="form-group">
+            <label>购买平台</label>
+            <select id="editBuyPlatform">
+              <option value="淘宝">淘宝</option>
+              <option value="京东">京东</option>
+              <option value="拼多多">拼多多</option>
+              <option value="得物">得物</option>
+              <option value="抖音小店">抖音小店</option>
+              <option value="小红书">小红书</option>
+              <option value="亚马逊">亚马逊</option>
+              <option value="eBay">eBay</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
 
+          <div class="form-group">
+            <label>货号</label>
+            <input type="text" id="editGoodsCode" />
+          </div>
+          <div class="form-group">
+            <label>商品描述</label>
+            <input type="text" id="editGoodsDesc" />
+          </div>
+
+          <div class="form-group">
+            <label>件数</label>
+            <input type="number" id="editQuantity" min="1" step="1" />
+          </div>
+          <div class="form-group">
+            <label>单件成本价 (¥)</label>
+            <input type="number" id="editCostPrice" step="0.01" min="0" />
+          </div>
+
+          <div class="form-group">
+            <label>出售日期</label>
+            <input type="date" id="editSellDate" />
+          </div>
+          <div class="form-group">
+            <label>单件售出价 (¥)</label>
+            <input type="number" id="editSellPrice" step="0.01" min="0" />
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label>备注</label>
+            <input type="text" id="editRemark" />
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+          <button class="btn btn-primary" onclick="saveRecord()">保存修改</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Supabase JS（浏览器 ESM 方式） -->
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+    // 你的 Supabase 信息
+    const SUPABASE_URL = "https://tpvodhwikbhigdxcthsk.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_kiSkcXCRrrfdbsOAfjuNnw_pSHDoTNa";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY); // 初始化 [web:208]
+
+    // 应用状态
+    let records = [];
+    let editingRowId = null; // 云端表 purchases 的 id
+
+    // 初始化日期
+    document.getElementById('buyDate').valueAsDate = new Date();
+    document.getElementById('sellDate').valueAsDate = new Date();
+
+    // ---------- UI 工具 ----------
+    function showMsg(text) {
+      const msg = document.getElementById('successMsg');
+      msg.textContent = text;
+      msg.classList.add('show');
+      setTimeout(() => msg.classList.remove('show'), 2000);
+    }
+
+    window.openAuthModal = function () {
+      document.getElementById('authModal').classList.add('active');
+    }
+    window.closeAuthModal = function () {
+      document.getElementById('authModal').classList.remove('active');
+    }
+
+    window.closeEditModal = function () {
+      document.getElementById('editModal').classList.remove('active');
+      editingRowId = null;
+    }
+
+    function setLoggedInUI(user) {
+      const info = document.getElementById('authInfo');
+      const root = document.getElementById('appRoot');
+      if (user) {
+        info.textContent = `已登录：${user.email}`;
+        root.classList.remove('hidden');
+      } else {
+        info.textContent = '未登录：请先登录/注册';
+        root.classList.add('hidden');
+      }
+    }
+
+    // ---------- Auth ----------
+    window.signUp = async function () {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
+      if (!email || !password) return alert('请输入邮箱和密码');
+
+      const { error } = await supabase.auth.signUp({ email, password }); // 注册 [web:266]
+      if (error) return alert(error.message);
+      alert('注册成功。若启用邮箱验证，请先去邮箱确认后再登录。');
+    }
+
+    window.signIn = async function () {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
+      if (!email || !password) return alert('请输入邮箱和密码');
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password }); // 登录 [web:265]
+      if (error) return alert(error.message);
+
+      closeAuthModal();
+      await refreshRecords();
+    }
+
+    window.signOut = async function () {
+      await supabase.auth.signOut();
+      records = [];
+      renderTable();
+      setLoggedInUI(null);
+    }
+
+    // 监听登录态变化
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      setLoggedInUI(session?.user ?? null);
+      if (session?.user) {
+        await refreshRecords();
+      }
+    });
+
+    // 初次进入页面：获取 session
+    const { data: { session } } = await supabase.auth.getSession();
+    setLoggedInUI(session?.user ?? null);
+    if (session?.user) await refreshRecords();
+
+    // ---------- 数据：云端 CRUD ----------
+    function calcDerived(record) {
+      const q = Number(record.quantity || 0);
+      const cost = Number(record.cost_price || 0);
+      const sell = record.sell_price === null || record.sell_price === undefined ? null : Number(record.sell_price);
+
+      const totalCost = cost * q;
+      const totalSell = sell === null || Number.isNaN(sell) ? null : (sell * q);
+      const profit = totalSell === null ? null : (totalSell - totalCost);
+      const profitRate = totalSell === null || totalCost <= 0 ? null : (profit / totalCost * 100);
+
+      return { totalCost, totalSell, profit, profitRate };
+    }
+
+    window.refreshRecords = async function () {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('purchases')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) return alert(error.message);
+      records = data || [];
+      renderTable();
+    }
+
+    window.addRecord = async function () {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return alert('请先登录');
+
+      const buy_date = document.getElementById('buyDate').value;
+      const buy_platform = document.getElementById('buyPlatform').value;
+      const goods_code = document.getElementById('goodsCode').value;
+      const goods_desc = document.getElementById('goodsDesc').value;
+      const quantity = parseInt(document.getElementById('quantity').value, 10) || 0;
+      const cost_price = parseFloat(document.getElementById('costPrice').value) || 0;
+
+      const sell_date = document.getElementById('sellDate').value || null;
+      const sellPriceInput = document.getElementById('sellPrice').value;
+      const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
+
+      const remark = document.getElementById('remark').value;
+
+      if (!buy_date || !buy_platform || !quantity || !cost_price) {
+        alert('请填写必要信息：购买日期、平台、件数、成本价\n售出价可稍后添加');
+        return;
+      }
+
+      const payload = {
+        user_id: user.id,
+        buy_date,
+        buy_platform,
+        goods_code,
+        goods_desc,
+        quantity,
+        cost_price: Number(cost_price.toFixed(2)),
+        sell_date,
+        sell_price: sell_price === null ? null : Number(sell_price.toFixed(2)),
+        remark
+      };
+
+      const { error } = await supabase.from('purchases').insert(payload); // 插入 [web:279]
+      if (error) return alert(error.message);
+
+      // 清空表单
+      document.getElementById('buyDate').valueAsDate = new Date();
+      document.getElementById('buyPlatform').value = '';
+      document.getElementById('goodsCode').value = '';
+      document.getElementById('goodsDesc').value = '';
+      document.getElementById('quantity').value = 1;
+      document.getElementById('costPrice').value = '';
+      document.getElementById('sellDate').valueAsDate = new Date();
+      document.getElementById('sellPrice').value = '';
+      document.getElementById('remark').value = '';
+
+      showMsg('✓ 云端记录已添加');
+      await refreshRecords();
+    }
+
+    window.editRecord = function (rowId) {
+      const record = records.find(r => r.id === rowId);
+      if (!record) return;
+
+      editingRowId = rowId;
+
+      document.getElementById('editBuyDate').value = record.buy_date || '';
+      document.getElementById('editBuyPlatform').value = record.buy_platform || '淘宝';
+      document.getElementById('editGoodsCode').value = record.goods_code || '';
+      document.getElementById('editGoodsDesc').value = record.goods_desc || '';
+      document.getElementById('editQuantity').value = record.quantity || 1;
+      document.getElementById('editCostPrice').value = record.cost_price ?? 0;
+      document.getElementById('editSellDate').value = record.sell_date || '';
+      document.getElementById('editSellPrice').value = record.sell_price ?? '';
+      document.getElementById('editRemark').value = record.remark || '';
+
+      document.getElementById('editModal').classList.add('active');
+    }
+
+    window.saveRecord = async function () {
+      if (editingRowId === null) return;
+
+      const quantity = parseInt(document.getElementById('editQuantity').value, 10) || 0;
+      const cost_price = parseFloat(document.getElementById('editCostPrice').value) || 0;
+      if (!quantity || !cost_price) return alert('请填写件数和成本价');
+
+      const sellPriceInput = document.getElementById('editSellPrice').value;
+      const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
+
+      const updatePayload = {
+        buy_date: document.getElementById('editBuyDate').value,
+        buy_platform: document.getElementById('editBuyPlatform').value,
+        goods_code: document.getElementById('editGoodsCode').value,
+        goods_desc: document.getElementById('editGoodsDesc').value,
+        quantity,
+        cost_price: Number(cost_price.toFixed(2)),
+        sell_date: document.getElementById('editSellDate').value || null,
+        sell_price: sell_price === null ? null : Number(sell_price.toFixed(2)),
+        remark: document.getElementById('editRemark').value
+      };
+
+      const { error } = await supabase
+        .from('purchases')
+        .update(updatePayload)
+        .eq('id', editingRowId); // 更新 [web:274]
+
+      if (error) return alert(error.message);
+
+      closeEditModal();
+      showMsg('✓ 云端记录已更新');
+      await refreshRecords();
+    }
+
+    window.deleteRecord = async function (rowId) {
+      if (!confirm('确认删除此记录？')) return;
+
+      const { error } = await supabase
+        .from('purchases')
+        .delete()
+        .eq('id', rowId);
+
+      if (error) return alert(error.message);
+
+      showMsg('✓ 云端记录已删除');
+      await refreshRecords();
+    }
+
+    // ---------- 渲染 ----------
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+
+      if (!records || records.length === 0) {
+        tbody.innerHTML = '<tr class="empty-state"><td colspan="14">暂无数据，添加第一条记录吧 👆</td></tr>';
+        updateStats();
+        return;
+      }
+
+      tbody.innerHTML = records.map((r, index) => {
+        const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
+
+        const profitClass =
+          profit === null ? '' : (profit >= 0 ? 'profit-positive' : 'profit-negative');
+
+        const profitDisplay =
+          profit === null ? '待定' : `¥${profit.toFixed(2)}`;
+
+        const profitRateDisplay =
+          profitRate === null ? '待定' : `${profitRate.toFixed(2)}%`;
+
+        const sellDateDisplay = r.sell_date ? r.sell_date : '-';
+        const sellPriceDisplay = (r.sell_price === null || r.sell_price === undefined) ? '-' : `¥${Number(r.sell_price).toFixed(2)}`;
+
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${r.buy_date || ''}</td>
+            <td>${r.buy_platform || ''}</td>
+            <td>${r.goods_code || ''}</td>
+            <td>${r.goods_desc || ''}</td>
+            <td>${r.quantity || 0}</td>
+            <td>¥${Number(r.cost_price || 0).toFixed(2)}</td>
+            <td>¥${Number(totalCost || 0).toFixed(2)}</td>
+            <td>${sellDateDisplay}</td>
+            <td>${sellPriceDisplay}</td>
+            <td>${totalSell === null ? '-' : `¥${Number(totalSell).toFixed(2)}`}</td>
+            <td class="${profitClass}">${profitDisplay}</td>
+            <td class="${profitClass}">${profitRateDisplay}</td>
+            <td style="display:flex; gap:5px;">
+              <button class="btn btn-danger" style="flex:1; padding:6px 8px; font-size:11px;" onclick="editRecord(${r.id})">编辑</button>
+              <button class="btn btn-danger" style="flex:1; padding:6px 8px; font-size:11px; background:#ff6b6b;" onclick="deleteRecord(${r.id})">删除</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      updateStats();
+    }
+
+    function updateStats() {
+      const totalCount = records.length;
+      const totalQuantity = records.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
+
+      const totalCost = records.reduce((sum, r) => {
+        const { totalCost } = calcDerived(r);
+        return sum + Number(totalCost || 0);
+      }, 0);
+
+      const totalRevenue = records.reduce((sum, r) => {
+        const { totalSell } = calcDerived(r);
+        return sum + Number(totalSell || 0);
+      }, 0);
+
+      const totalProfit = totalRevenue - totalCost;
+      const avgProfitRate = totalCost > 0 ? ((totalProfit / totalCost) * 100) : 0;
+
+      document.getElementById('totalCount').textContent = totalCount;
+      document.getElementById('totalQuantity').textContent = totalQuantity;
+      document.getElementById('totalCost').textContent = '¥' + totalCost.toFixed(2);
+      document.getElementById('totalRevenue').textContent = '¥' + totalRevenue.toFixed(2);
+      document.getElementById('totalProfit').textContent = '¥' + totalProfit.toFixed(2);
+      document.getElementById('avgProfitRate').textContent = avgProfitRate.toFixed(2) + '%';
+    }
+
+    window.exportData = function () {
+      if (!records || records.length === 0) {
+        alert('暂无数据可导出');
+        return;
+      }
+
+      let csv = '序号,购买日期,购买平台,货号,商品描述,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
+
+      records.forEach((r, idx) => {
+        const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
+
+        const sellDate = r.sell_date || '';
+        const sellPrice = r.sell_price === null || r.sell_price === undefined ? '' : Number(r.sell_price).toFixed(2);
+
+        csv += `${idx + 1},"${r.buy_date || ''}","${r.buy_platform || ''}","${r.goods_code || ''}","${(r.goods_desc || '').replaceAll('"','""')}",${r.quantity || 0},${Number(r.cost_price || 0).toFixed(2)},${Number(totalCost || 0).toFixed(2)},"${sellDate}",${sellPrice},${totalSell === null ? '' : Number(totalSell).toFixed(2)},${profit === null ? '' : profit.toFixed(2)},${profitRate === null ? '' : profitRate.toFixed(2)}%,"${(r.remark || '').replaceAll('"','""')}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `购销记账_云端_${new Date().toISOString().split('T')[0]}.csv`);
+      link.click();
+    }
+
+    // 初次渲染（未登录时显示空）
+    renderTable();
+  </script>
+</body>
+</html>
