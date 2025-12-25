@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>购销记账工具</title>
+  <title>购销记账工具（云端 Supabase）</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -13,9 +13,30 @@
       padding: 20px;
     }
     .container { max-width: 1200px; margin: 0 auto; }
-    .header { text-align: center; color: white; margin-bottom: 20px; }
-    .header h1 { font-size: 32px; margin-bottom: 10px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-    .header p { font-size: 14px; opacity: 0.9; }
+    .header { text-align: center; color: white; margin-bottom: 18px; }
+    .header h1 { font-size: 30px; margin-bottom: 8px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .header p { font-size: 13px; opacity: 0.92; }
+
+    .auth-bar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    @media (max-width: 768px) { .auth-bar { grid-template-columns: 1fr; } }
+
+    .auth-info {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: white;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .auth-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .auth-actions .btn { width: auto; }
 
     .main-content { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
     @media (max-width: 1024px) { .main-content { grid-template-columns: 1fr; } }
@@ -57,9 +78,11 @@
     .btn-secondary:hover { background: #e8e8e8; }
     .btn-danger { background: #ff6b6b; color: white; padding: 8px 12px; width: auto; font-size: 12px; }
     .btn-danger:hover { background: #ff5252; }
+    .btn-white { background: white; color: #333; border: 1px solid rgba(255,255,255,0.55); }
+    .btn-white:hover { background: #f3f3f3; }
 
-    .btn-group { display: flex; gap: 10px; margin-top: 15px; }
-    .btn-group .btn { flex: 1; }
+    .btn-group { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+    .btn-group .btn { flex: 1; min-width: 180px; }
 
     table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
     thead { background: #f8f9fa; }
@@ -69,7 +92,6 @@
 
     .profit-positive { color: #22c55e; font-weight: 600; }
     .profit-negative { color: #ff6b6b; font-weight: 600; }
-
     .empty-state { text-align: center; color: #999; padding: 30px; }
     .table-scroll { overflow-x: auto; }
 
@@ -86,30 +108,10 @@
     .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
     .modal-actions button { flex: 1; }
 
-    .auth-bar {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-    @media (max-width: 768px) { .auth-bar { grid-template-columns: 1fr; } }
-    .auth-info {
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.25);
-      color: white;
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 13px;
-    }
-    .auth-actions { display: flex; gap: 10px; }
-    .auth-actions .btn { width: auto; }
-    .btn-white { background: white; color: #333; border: 1px solid rgba(255,255,255,0.5); }
-    .btn-white:hover { background: #f3f3f3; }
-
     .hidden { display: none !important; }
   </style>
 </head>
+
 <body>
   <div class="container">
     <div class="header">
@@ -117,20 +119,19 @@
       <p>云端版（Supabase）- 多设备同步 / 每账号独立</p>
     </div>
 
-    <!-- 顶部登录状态 -->
     <div class="auth-bar">
-      <div class="auth-info" id="authInfo">未登录</div>
+      <div class="auth-info" id="authInfo">未登录：请先登录/注册</div>
       <div class="auth-actions">
         <button class="btn btn-white" onclick="openAuthModal()">登录 / 注册</button>
         <button class="btn btn-white" onclick="signOut()">退出登录</button>
       </div>
     </div>
 
-    <div class="main-content" id="appRoot" class="hidden">
-      <!-- 添加记录卡片 -->
+    <div class="main-content hidden" id="appRoot">
+      <!-- 添加记录 -->
       <div class="card">
         <h2>➕ 添加新记录</h2>
-        <div class="success-message" id="successMsg">✓ 记录已添加</div>
+        <div class="success-message" id="successMsg">✓ 操作成功</div>
 
         <div class="form-group">
           <label>购买日期</label>
@@ -191,27 +192,30 @@
         <button class="btn btn-primary" onclick="addRecord()">添加记录</button>
       </div>
 
-      <!-- 数据统计卡片 -->
+      <!-- 数据统计 -->
       <div class="card">
         <h2>📈 数据统计</h2>
-
         <div style="padding: 20px 0;">
           <div style="margin-bottom: 20px;">
             <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总交易笔数</div>
             <div style="font-size: 28px; font-weight: 700; color: #667eea;" id="totalCount">0</div>
           </div>
+
           <div style="margin-bottom: 20px;">
             <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总件数</div>
             <div style="font-size: 28px; font-weight: 700; color: #667eea;" id="totalQuantity">0</div>
           </div>
+
           <div style="margin-bottom: 20px;">
             <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总成本</div>
             <div style="font-size: 28px; font-weight: 700; color: #333;" id="totalCost">¥0.00</div>
           </div>
+
           <div style="margin-bottom: 20px;">
             <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总收益</div>
             <div style="font-size: 28px; font-weight: 700; color: #22c55e;" id="totalRevenue">¥0.00</div>
           </div>
+
           <div>
             <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总利润 / 平均利润率</div>
             <div style="font-size: 20px; font-weight: 700; color: #764ba2;">
@@ -223,8 +227,11 @@
 
         <div class="btn-group">
           <button class="btn btn-secondary" onclick="exportData()">📥 导出数据</button>
+          <button class="btn btn-secondary" onclick="triggerImport()">📤 导入数据</button>
           <button class="btn btn-secondary" onclick="refreshRecords()">🔄 刷新云端数据</button>
         </div>
+
+        <input id="importFile" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" class="hidden" />
       </div>
 
       <!-- 记录列表 -->
@@ -270,6 +277,7 @@
           <label>邮箱</label>
           <input type="email" id="authEmail" placeholder="you@example.com" />
         </div>
+
         <div class="form-group">
           <label>密码</label>
           <input type="password" id="authPassword" placeholder="至少 6 位" />
@@ -281,7 +289,7 @@
         </div>
 
         <div style="margin-top: 12px; font-size: 12px; color: #666; line-height: 1.6;">
-          注册后如果你在 Supabase 打开了邮箱验证，需要先去邮箱点确认链接才能登录。
+          如果你在 Supabase 开启了邮箱验证，注册后需要先去邮箱确认链接才能登录。
         </div>
       </div>
     </div>
@@ -354,48 +362,38 @@
 
   </div>
 
-  <!-- Supabase JS（浏览器 ESM 方式） -->
   <script type="module">
-    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-    // 你的 Supabase 信息
+    // === 你的 Supabase 信息（如换项目，改这里） ===
     const SUPABASE_URL = "https://tpvodhwikbhigdxcthsk.supabase.co";
     const SUPABASE_KEY = "sb_publishable_kiSkcXCRrrfdbsOAfjuNnw_pSHDoTNa";
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY); // 初始化 [web:208]
 
-    // 应用状态
+    // 状态
     let records = [];
-    let editingRowId = null; // 云端表 purchases 的 id
+    let editingRowId = null;
 
     // 初始化日期
     document.getElementById('buyDate').valueAsDate = new Date();
     document.getElementById('sellDate').valueAsDate = new Date();
 
-    // ---------- UI 工具 ----------
+    // ---------- UI ----------
     function showMsg(text) {
       const msg = document.getElementById('successMsg');
       msg.textContent = text;
       msg.classList.add('show');
-      setTimeout(() => msg.classList.remove('show'), 2000);
+      setTimeout(() => msg.classList.remove('show'), 2200);
     }
 
-    window.openAuthModal = function () {
-      document.getElementById('authModal').classList.add('active');
-    }
-    window.closeAuthModal = function () {
-      document.getElementById('authModal').classList.remove('active');
-    }
-
-    window.closeEditModal = function () {
-      document.getElementById('editModal').classList.remove('active');
-      editingRowId = null;
-    }
+    window.openAuthModal = () => document.getElementById('authModal').classList.add('active');
+    window.closeAuthModal = () => document.getElementById('authModal').classList.remove('active');
 
     function setLoggedInUI(user) {
       const info = document.getElementById('authInfo');
       const root = document.getElementById('appRoot');
       if (user) {
-        info.textContent = `已登录：${user.email}`;
+        info.textContent = `已登录：${user.email}\n（提示：数据存云端，换设备登录同账号即可同步）`;
         root.classList.remove('hidden');
       } else {
         info.textContent = '未登录：请先登录/注册';
@@ -409,44 +407,40 @@
       const password = document.getElementById('authPassword').value.trim();
       if (!email || !password) return alert('请输入邮箱和密码');
 
-      const { error } = await supabase.auth.signUp({ email, password }); // 注册 [web:266]
+      const { error } = await supabase.auth.signUp({ email, password });
       if (error) return alert(error.message);
       alert('注册成功。若启用邮箱验证，请先去邮箱确认后再登录。');
-    }
+    };
 
     window.signIn = async function () {
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value.trim();
       if (!email || !password) return alert('请输入邮箱和密码');
 
-      const { error } = await supabase.auth.signInWithPassword({ email, password }); // 登录 [web:265]
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return alert(error.message);
 
-      closeAuthModal();
+      window.closeAuthModal();
       await refreshRecords();
-    }
+    };
 
     window.signOut = async function () {
       await supabase.auth.signOut();
       records = [];
       renderTable();
       setLoggedInUI(null);
-    }
+    };
 
-    // 监听登录态变化
     supabase.auth.onAuthStateChange(async (_event, session) => {
       setLoggedInUI(session?.user ?? null);
-      if (session?.user) {
-        await refreshRecords();
-      }
+      if (session?.user) await refreshRecords();
     });
 
-    // 初次进入页面：获取 session
     const { data: { session } } = await supabase.auth.getSession();
     setLoggedInUI(session?.user ?? null);
     if (session?.user) await refreshRecords();
 
-    // ---------- 数据：云端 CRUD ----------
+    // ---------- 计算 ----------
     function calcDerived(record) {
       const q = Number(record.quantity || 0);
       const cost = Number(record.cost_price || 0);
@@ -456,10 +450,10 @@
       const totalSell = sell === null || Number.isNaN(sell) ? null : (sell * q);
       const profit = totalSell === null ? null : (totalSell - totalCost);
       const profitRate = totalSell === null || totalCost <= 0 ? null : (profit / totalCost * 100);
-
       return { totalCost, totalSell, profit, profitRate };
     }
 
+    // ---------- 云端读写 ----------
     window.refreshRecords = async function () {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -472,7 +466,7 @@
       if (error) return alert(error.message);
       records = data || [];
       renderTable();
-    }
+    };
 
     window.addRecord = async function () {
       const { data: { user } } = await supabase.auth.getUser();
@@ -509,10 +503,9 @@
         remark
       };
 
-      const { error } = await supabase.from('purchases').insert(payload); // 插入 [web:279]
+      const { error } = await supabase.from('purchases').insert(payload); // 批量/单条 insert 均可 [web:362]
       if (error) return alert(error.message);
 
-      // 清空表单
       document.getElementById('buyDate').valueAsDate = new Date();
       document.getElementById('buyPlatform').value = '';
       document.getElementById('goodsCode').value = '';
@@ -525,14 +518,13 @@
 
       showMsg('✓ 云端记录已添加');
       await refreshRecords();
-    }
+    };
 
     window.editRecord = function (rowId) {
       const record = records.find(r => r.id === rowId);
       if (!record) return;
 
       editingRowId = rowId;
-
       document.getElementById('editBuyDate').value = record.buy_date || '';
       document.getElementById('editBuyPlatform').value = record.buy_platform || '淘宝';
       document.getElementById('editGoodsCode').value = record.goods_code || '';
@@ -542,9 +534,13 @@
       document.getElementById('editSellDate').value = record.sell_date || '';
       document.getElementById('editSellPrice').value = record.sell_price ?? '';
       document.getElementById('editRemark').value = record.remark || '';
-
       document.getElementById('editModal').classList.add('active');
-    }
+    };
+
+    window.closeEditModal = function () {
+      document.getElementById('editModal').classList.remove('active');
+      editingRowId = null;
+    };
 
     window.saveRecord = async function () {
       if (editingRowId === null) return;
@@ -568,30 +564,202 @@
         remark: document.getElementById('editRemark').value
       };
 
-      const { error } = await supabase
-        .from('purchases')
-        .update(updatePayload)
-        .eq('id', editingRowId); // 更新 [web:274]
-
+      const { error } = await supabase.from('purchases').update(updatePayload).eq('id', editingRowId);
       if (error) return alert(error.message);
 
-      closeEditModal();
+      window.closeEditModal();
       showMsg('✓ 云端记录已更新');
       await refreshRecords();
-    }
+    };
 
     window.deleteRecord = async function (rowId) {
       if (!confirm('确认删除此记录？')) return;
-
-      const { error } = await supabase
-        .from('purchases')
-        .delete()
-        .eq('id', rowId);
-
+      const { error } = await supabase.from('purchases').delete().eq('id', rowId);
       if (error) return alert(error.message);
-
       showMsg('✓ 云端记录已删除');
       await refreshRecords();
+    };
+
+    // ---------- 导出 ----------
+    window.exportData = function () {
+      if (!records || records.length === 0) return alert('暂无数据可导出');
+
+      let csv = '序号,购买日期,购买平台,货号,商品描述,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
+      records.forEach((r, idx) => {
+        const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
+        const sellDate = r.sell_date || '';
+        const sellPrice = r.sell_price === null || r.sell_price === undefined ? '' : Number(r.sell_price).toFixed(2);
+
+        const safeDesc = (r.goods_desc || '').replaceAll('"', '""');
+        const safeRemark = (r.remark || '').replaceAll('"', '""');
+
+        csv += `${idx + 1},"${r.buy_date || ''}","${r.buy_platform || ''}","${r.goods_code || ''}","${safeDesc}",${r.quantity || 0},${Number(r.cost_price || 0).toFixed(2)},${Number(totalCost || 0).toFixed(2)},"${sellDate}",${sellPrice},${totalSell === null ? '' : Number(totalSell).toFixed(2)},${profit === null ? '' : profit.toFixed(2)},${profitRate === null ? '' : profitRate.toFixed(2)}%,"${safeRemark}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `购销记账_云端_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+    };
+
+    // ---------- 导入（CSV/TSV） ----------
+    const importInput = document.getElementById('importFile');
+
+    window.triggerImport = function () {
+      importInput.value = '';
+      importInput.click();
+    };
+
+    importInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return alert('请先登录');
+
+      const ok = confirm('确认导入？导入会把文件里的记录追加到云端（不会覆盖已有数据）。\n注意：重复导入同一个文件会产生重复数据。');
+      if (!ok) return;
+
+      try {
+        const text = await readFileAsText(file); // FileReader 读取文本 [web:357]
+        const rows = parseDelimitedTable(text);
+        if (rows.length < 2) return alert('文件内容为空或格式不正确');
+
+        const header = rows[0];
+        const col = indexColumns(header);
+
+        const required = ['购买日期', '购买平台', '件数', '单件成本'];
+        for (const k of required) {
+          if (col[k] === undefined) return alert(`缺少列：${k}`);
+        }
+
+        const payloads = [];
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          if (r.every(v => (v ?? '').trim() === '')) continue;
+
+          const buy_date = getCell(r, col, '购买日期');
+          const buy_platform = getCell(r, col, '购买平台');
+          const goods_code = getCell(r, col, '货号');
+          const goods_desc = getCell(r, col, '商品描述');
+          const quantityStr = getCell(r, col, '件数');
+          const costStr = getCell(r, col, '单件成本');
+          const sell_date = getCell(r, col, '出售日期');
+          const sellStr = getCell(r, col, '单件售出价');
+          const remark = getCell(r, col, '备注');
+
+          const quantity = parseInt(quantityStr, 10);
+          const cost_price = parseFloat(costStr);
+
+          if (!buy_date || !buy_platform || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost_price) || cost_price <= 0) {
+            continue; // 跳过不完整行
+          }
+
+          let sell_price = null;
+          if (sellStr !== '') {
+            const s = parseFloat(sellStr);
+            sell_price = Number.isFinite(s) ? Number(s.toFixed(2)) : null;
+          }
+
+          payloads.push({
+            user_id: user.id,
+            buy_date: normalizeDate(buy_date),
+            buy_platform: buy_platform.trim(),
+            goods_code: (goods_code || '').trim(),
+            goods_desc: (goods_desc || '').trim(),
+            quantity,
+            cost_price: Number(cost_price.toFixed(2)),
+            sell_date: sell_date ? normalizeDate(sell_date) : null,
+            sell_price,
+            remark: (remark || '').trim()
+          });
+        }
+
+        if (payloads.length === 0) return alert('没有可导入的有效数据（可能日期/件数/成本为空或格式不对）');
+
+        const batchSize = 200;
+        let inserted = 0;
+
+        for (let start = 0; start < payloads.length; start += batchSize) {
+          const batch = payloads.slice(start, start + batchSize);
+          const { error } = await supabase.from('purchases').insert(batch); // 批量 insert [web:362]
+          if (error) throw new Error(error.message);
+          inserted += batch.length;
+        }
+
+        showMsg(`✓ 已导入 ${inserted} 条到云端`);
+        await refreshRecords();
+      } catch (err) {
+        alert('导入失败：' + (err?.message || String(err)));
+      }
+    });
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
+        reader.readAsText(file, 'utf-8'); // readAsText [web:357]
+      });
+    }
+
+    function parseDelimitedTable(text) {
+      const cleaned = String(text || '').replace(/^\uFEFF/, '').trim();
+      if (!cleaned) return [];
+      const delimiter = cleaned.includes('\t') ? '\t' : ','; // 兼容 TSV/CSV
+
+      const lines = cleaned.split(/\r?\n/);
+      const rows = [];
+      for (const line of lines) {
+        if (line.trim() === '') continue;
+        rows.push(parseLine(line, delimiter));
+      }
+      return rows;
+    }
+
+    function parseLine(line, delimiter) {
+      const out = [];
+      let cur = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+          else { inQuotes = !inQuotes; }
+          continue;
+        }
+        if (!inQuotes && ch === delimiter) {
+          out.push(cur);
+          cur = '';
+          continue;
+        }
+        cur += ch;
+      }
+      out.push(cur);
+      return out.map(v => (v ?? '').trim());
+    }
+
+    function indexColumns(headerRow) {
+      const map = {};
+      for (let i = 0; i < headerRow.length; i++) {
+        const key = String(headerRow[i] ?? '').trim();
+        if (key) map[key] = i;
+      }
+      return map;
+    }
+
+    function getCell(row, colMap, name) {
+      const idx = colMap[name];
+      if (idx === undefined) return '';
+      return String(row[idx] ?? '').trim();
+    }
+
+    function normalizeDate(s) {
+      const v = String(s).trim();
+      if (!v) return null;
+      return v.replace(/[./]/g, '-');
     }
 
     // ---------- 渲染 ----------
@@ -607,14 +775,9 @@
       tbody.innerHTML = records.map((r, index) => {
         const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
 
-        const profitClass =
-          profit === null ? '' : (profit >= 0 ? 'profit-positive' : 'profit-negative');
-
-        const profitDisplay =
-          profit === null ? '待定' : `¥${profit.toFixed(2)}`;
-
-        const profitRateDisplay =
-          profitRate === null ? '待定' : `${profitRate.toFixed(2)}%`;
+        const profitClass = profit === null ? '' : (profit >= 0 ? 'profit-positive' : 'profit-negative');
+        const profitDisplay = profit === null ? '待定' : `¥${profit.toFixed(2)}`;
+        const profitRateDisplay = profitRate === null ? '待定' : `${profitRate.toFixed(2)}%`;
 
         const sellDateDisplay = r.sell_date ? r.sell_date : '-';
         const sellPriceDisplay = (r.sell_price === null || r.sell_price === undefined) ? '-' : `¥${Number(r.sell_price).toFixed(2)}`;
@@ -670,32 +833,7 @@
       document.getElementById('avgProfitRate').textContent = avgProfitRate.toFixed(2) + '%';
     }
 
-    window.exportData = function () {
-      if (!records || records.length === 0) {
-        alert('暂无数据可导出');
-        return;
-      }
-
-      let csv = '序号,购买日期,购买平台,货号,商品描述,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
-
-      records.forEach((r, idx) => {
-        const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
-
-        const sellDate = r.sell_date || '';
-        const sellPrice = r.sell_price === null || r.sell_price === undefined ? '' : Number(r.sell_price).toFixed(2);
-
-        csv += `${idx + 1},"${r.buy_date || ''}","${r.buy_platform || ''}","${r.goods_code || ''}","${(r.goods_desc || '').replaceAll('"','""')}",${r.quantity || 0},${Number(r.cost_price || 0).toFixed(2)},${Number(totalCost || 0).toFixed(2)},"${sellDate}",${sellPrice},${totalSell === null ? '' : Number(totalSell).toFixed(2)},${profit === null ? '' : profit.toFixed(2)},${profitRate === null ? '' : profitRate.toFixed(2)}%,"${(r.remark || '').replaceAll('"','""')}"\n`;
-      });
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `购销记账_云端_${new Date().toISOString().split('T')[0]}.csv`);
-      link.click();
-    }
-
-    // 初次渲染（未登录时显示空）
+    // 初次渲染
     renderTable();
   </script>
 </body>
