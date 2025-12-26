@@ -72,6 +72,12 @@
       cursor: pointer;
       transition: all 0.3s;
       width: 100%;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      user-select: none;
     }
     .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-top: 10px; }
     .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3); }
@@ -109,7 +115,14 @@
     .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
     .modal-actions button { flex: 1; }
 
-    .hidden { display: none !important; }
+    .hidden {
+      position: absolute !important;
+      left: -9999px !important;
+      width: 1px !important;
+      height: 1px !important;
+      opacity: 0 !important;
+    }
+
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -274,7 +287,10 @@
 
         <div class="btn-group">
           <button class="btn btn-secondary" onclick="exportData()">📥 导出数据</button>
-          <button class="btn btn-secondary" onclick="triggerImport()">📤 导入数据</button>
+
+          <!-- 最稳的导入触发：label for file input -->
+          <label class="btn btn-secondary" for="importFile">📤 导入数据</label>
+
           <button class="btn btn-secondary" onclick="refreshRecords()">🔄 刷新云端数据</button>
         </div>
 
@@ -478,10 +494,9 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    // === 你的 Supabase 信息 ===
     const SUPABASE_URL = "https://tpvodhwikbhigdxcthsk.supabase.co";
     const SUPABASE_KEY = "sb_publishable_kiSkcXCRrrfdbsOAfjuNnw_pSHDoTNa";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY); // createClient(url,key) [web:208]
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let records = [];
     let filteredRecords = [];
@@ -491,12 +506,12 @@
     document.getElementById('buyDate').valueAsDate = new Date();
     document.getElementById('sellDate').valueAsDate = new Date();
 
-    // 过滤器：输入变化即应用（也保留按钮）
+    // 过滤器：输入变化即应用
     ['filterStatus','filterPlatform','filterSold','filterKeyword'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener('input', () => applyFilters());
-      el.addEventListener('change', () => applyFilters());
+      el.addEventListener('input', () => window.applyFilters());
+      el.addEventListener('change', () => window.applyFilters());
     });
 
     // ---------- UI ----------
@@ -542,7 +557,7 @@
       if (error) return alert(error.message);
 
       window.closeAuthModal();
-      await refreshRecords();
+      await window.refreshRecords();
     };
 
     window.signOut = async function () {
@@ -553,15 +568,14 @@
       setLoggedInUI(null);
     };
 
-    // 监听登录状态变化（Supabase 推荐的事件方式）[web:662]
     supabase.auth.onAuthStateChange(async (_event, session) => {
       setLoggedInUI(session?.user ?? null);
-      if (session?.user) await refreshRecords();
+      if (session?.user) await window.refreshRecords();
     });
 
     const { data: { session } } = await supabase.auth.getSession();
     setLoggedInUI(session?.user ?? null);
-    if (session?.user) await refreshRecords();
+    if (session?.user) await window.refreshRecords();
 
     // ---------- 计算 ----------
     function calcDerived(record) {
@@ -594,7 +608,7 @@
       if (error) return alert(error.message);
 
       records = data || [];
-      applyFilters(); // 自动刷新筛选结果并渲染
+      window.applyFilters();
       showMsg('✓ 已刷新云端数据');
     };
 
@@ -651,7 +665,7 @@
       document.getElementById('remark').value = '';
 
       showMsg('✓ 云端记录已添加');
-      await refreshRecords();
+      await window.refreshRecords();
     };
 
     window.editRecord = function (rowId) {
@@ -705,7 +719,7 @@
 
       window.closeEditModal();
       showMsg('✓ 云端记录已更新');
-      await refreshRecords();
+      await window.refreshRecords();
     };
 
     window.deleteRecord = async function (rowId) {
@@ -713,7 +727,7 @@
       const { error } = await supabase.from('purchases').delete().eq('id', rowId);
       if (error) return alert(error.message);
       showMsg('✓ 云端记录已删除');
-      await refreshRecords();
+      await window.refreshRecords();
     };
 
     // ---------- 筛选 ----------
@@ -746,7 +760,7 @@
       document.getElementById('filterPlatform').value = '全部';
       document.getElementById('filterSold').value = '全部';
       document.getElementById('filterKeyword').value = '';
-      applyFilters();
+      window.applyFilters();
     };
 
     // ---------- 状态统计 ----------
@@ -815,128 +829,4 @@
       const rows = filteredRecords || [];
 
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="empty-state"><td colspan="15">暂无数据（可能被筛选条件过滤）</td></tr>`;
-        updateStats();
-        return;
-      }
-
-      tbody.innerHTML = rows.map((r, idx) => {
-        const d = calcDerived(r);
-
-        const totalSellText = d.totalSell === null ? '' : `¥${d.totalSell.toFixed(2)}`;
-        const profitText = d.profit === null ? '' : `¥${d.profit.toFixed(2)}`;
-        const profitRateText = d.profitRate === null ? '' : `${d.profitRate.toFixed(2)}%`;
-
-        const profitClass = (d.profit ?? 0) >= 0 ? 'profit-positive' : 'profit-negative';
-
-        return `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${escapeHtml(r.buy_date || '')}</td>
-            <td>${escapeHtml(r.buy_platform || '')}</td>
-            <td>${escapeHtml(r.goods_code || '')}</td>
-            <td>${escapeHtml(r.goods_desc || '')}</td>
-            <td>${statusBadge(r.status)}</td>
-            <td>${Number(r.quantity || 0)}</td>
-            <td>¥${Number(r.cost_price || 0).toFixed(2)}</td>
-            <td>¥${(d.totalCost || 0).toFixed(2)}</td>
-            <td>${escapeHtml(r.sell_date || '')}</td>
-            <td>${(r.sell_price === null || r.sell_price === undefined) ? '' : `¥${Number(r.sell_price).toFixed(2)}`}</td>
-            <td>${totalSellText}</td>
-            <td class="${profitClass}">${profitText}</td>
-            <td>${profitRateText}</td>
-            <td>
-              <button class="btn btn-secondary" style="padding:8px 12px; width:auto; font-size:12px;" onclick="editRecord(${r.id})">编辑</button>
-              <button class="btn btn-danger" onclick="deleteRecord(${r.id})">删除</button>
-            </td>
-          </tr>
-        `;
-      }).join('');
-
-      updateStats();
-    }
-
-    // ---------- 导入（CSV/TSV）辅助 ----------
-    function readFileAsText(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
-        reader.readAsText(file, 'utf-8'); // readAsText [web:357]
-      });
-    }
-
-    function parseDelimitedTable(text) {
-      const cleaned = String(text || '').replace(/^\uFEFF/, '').trim();
-      if (!cleaned) return [];
-      const delimiter = cleaned.includes('\t') ? '\t' : ',';
-
-      const lines = cleaned.split(/\r?\n/);
-      const rows = [];
-      for (const line of lines) {
-        if (line.trim() === '') continue;
-        rows.push(parseLine(line, delimiter));
-      }
-      return rows;
-    }
-
-    function parseLine(line, delimiter) {
-      const out = [];
-      let cur = '';
-      let inQuotes = false;
-
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') {
-          if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
-          else { inQuotes = !inQuotes; }
-          continue;
-        }
-        if (!inQuotes && ch === delimiter) {
-          out.push(cur);
-          cur = '';
-          continue;
-        }
-        cur += ch;
-      }
-      out.push(cur);
-      return out.map(v => (v ?? '').trim());
-    }
-
-    function indexColumns(headerRow) {
-      const map = {};
-      for (let i = 0; i < headerRow.length; i++) {
-        const key = String(headerRow[i] ?? '').trim();
-        if (key) map[key] = i;
-      }
-      return map;
-    }
-
-    function getCell(row, colMap, name) {
-      const idx = colMap[name];
-      if (idx === undefined) return '';
-      return String(row[idx] ?? '').trim();
-    }
-
-    function normalizeDate(s) {
-      const v = String(s).trim();
-      if (!v) return null;
-      return v.replace(/[./]/g, '-');
-    }
-
-    // ---------- 安全转义 ----------
-    function escapeHtml(s) {
-      return String(s ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-    }
-
-    // 页面首次：保持“未登录”时也能正常渲染空表
-    filteredRecords = [];
-    renderTable();
-  </script>
-</body>
-</html>
+        tbody.innerHTML = `<tr class="empty-state"><td colspan="15">暂无数据（可能被筛选条件过滤）</td></tr
