@@ -34,6 +34,7 @@
       padding: 12px 14px;
       font-size: 13px;
       line-height: 1.5;
+      white-space: pre-line;
     }
     .auth-actions { display: flex; gap: 10px; flex-wrap: wrap; }
     .auth-actions .btn { width: auto; }
@@ -86,8 +87,8 @@
 
     table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
     thead { background: #f8f9fa; }
-    th { padding: 12px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd; }
-    td { padding: 12px; border-bottom: 1px solid #eee; }
+    th { padding: 12px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #ddd; white-space: nowrap; }
+    td { padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; }
     tr:hover { background: #f9f9f9; }
 
     .profit-positive { color: #22c55e; font-weight: 600; }
@@ -100,7 +101,7 @@
 
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
     .modal.active { display: flex; }
-    .modal-content { background: white; border-radius: 12px; padding: 30px; max-width: 520px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative; }
+    .modal-content { background: white; border-radius: 12px; padding: 30px; max-width: 560px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative; }
     .modal-header { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #333; }
     .modal-close { position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 28px; cursor: pointer; color: #999; }
     .modal-body { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
@@ -109,6 +110,16 @@
     .modal-actions button { flex: 1; }
 
     .hidden { display: none !important; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid #ddd;
+      background: #fafafa;
+      color: #333;
+      white-space: nowrap;
+    }
   </style>
 </head>
 
@@ -116,7 +127,7 @@
   <div class="container">
     <div class="header">
       <h1>📊 购销记账工具</h1>
-      <p>云端版（Supabase）- 多设备同步 / 每账号独立</p>
+      <p>云端版（Supabase）- 多设备同步 / 每账号独立 + 库存状态</p>
     </div>
 
     <div class="auth-bar">
@@ -162,6 +173,17 @@
         <div class="form-group">
           <label>商品描述</label>
           <textarea id="goodsDesc" placeholder="商品名称、型号等信息" rows="2"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>库存状态</label>
+          <select id="status">
+            <option value="运输中">运输中</option>
+            <option value="在仓库">在仓库</option>
+            <option value="闪电仓">闪电仓</option>
+            <option value="已出售">已出售</option>
+            <option value="已打款">已打款</option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -246,6 +268,7 @@
                 <th>平台</th>
                 <th>货号</th>
                 <th>商品描述</th>
+                <th>库存状态</th>
                 <th>件数</th>
                 <th>单件成本</th>
                 <th>总成本</th>
@@ -259,7 +282,7 @@
             </thead>
             <tbody id="tableBody">
               <tr class="empty-state">
-                <td colspan="14">暂无数据，添加第一条记录吧 👆</td>
+                <td colspan="15">暂无数据，添加第一条记录吧 👆</td>
               </tr>
             </tbody>
           </table>
@@ -330,9 +353,21 @@
           </div>
 
           <div class="form-group">
+            <label>库存状态</label>
+            <select id="editStatus">
+              <option value="运输中">运输中</option>
+              <option value="在仓库">在仓库</option>
+              <option value="闪电仓">闪电仓</option>
+              <option value="已出售">已出售</option>
+              <option value="已打款">已打款</option>
+            </select>
+          </div>
+
+          <div class="form-group">
             <label>件数</label>
             <input type="number" id="editQuantity" min="1" step="1" />
           </div>
+
           <div class="form-group">
             <label>单件成本价 (¥)</label>
             <input type="number" id="editCostPrice" step="0.01" min="0" />
@@ -363,12 +398,12 @@
   </div>
 
   <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    // === 你的 Supabase 信息（如换项目，改这里） ===
+    // === 你的 Supabase 信息 ===
     const SUPABASE_URL = "https://tpvodhwikbhigdxcthsk.supabase.co";
     const SUPABASE_KEY = "sb_publishable_kiSkcXCRrrfdbsOAfjuNnw_pSHDoTNa";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY); // 初始化 [web:208]
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY); // createClient(url,key) [web:208]
 
     // 状态
     let records = [];
@@ -393,7 +428,7 @@
       const info = document.getElementById('authInfo');
       const root = document.getElementById('appRoot');
       if (user) {
-        info.textContent = `已登录：${user.email}\n（提示：数据存云端，换设备登录同账号即可同步）`;
+        info.textContent = `已登录：${user.email}\n（数据在云端，换设备登录同账号即可同步）`;
         root.classList.remove('hidden');
       } else {
         info.textContent = '未登录：请先登录/注册';
@@ -453,6 +488,11 @@
       return { totalCost, totalSell, profit, profitRate };
     }
 
+    function statusBadge(status) {
+      const s = (status || '运输中').trim();
+      return `<span class="badge">${escapeHtml(s)}</span>`;
+    }
+
     // ---------- 云端读写 ----------
     window.refreshRecords = async function () {
       const { data: { user } } = await supabase.auth.getUser();
@@ -476,6 +516,8 @@
       const buy_platform = document.getElementById('buyPlatform').value;
       const goods_code = document.getElementById('goodsCode').value;
       const goods_desc = document.getElementById('goodsDesc').value;
+      const status = document.getElementById('status').value || '运输中';
+
       const quantity = parseInt(document.getElementById('quantity').value, 10) || 0;
       const cost_price = parseFloat(document.getElementById('costPrice').value) || 0;
 
@@ -496,6 +538,7 @@
         buy_platform,
         goods_code,
         goods_desc,
+        status,
         quantity,
         cost_price: Number(cost_price.toFixed(2)),
         sell_date,
@@ -503,13 +546,14 @@
         remark
       };
 
-      const { error } = await supabase.from('purchases').insert(payload); // 批量/单条 insert 均可 [web:362]
+      const { error } = await supabase.from('purchases').insert(payload); // insert() [web:279]
       if (error) return alert(error.message);
 
       document.getElementById('buyDate').valueAsDate = new Date();
       document.getElementById('buyPlatform').value = '';
       document.getElementById('goodsCode').value = '';
       document.getElementById('goodsDesc').value = '';
+      document.getElementById('status').value = '运输中';
       document.getElementById('quantity').value = 1;
       document.getElementById('costPrice').value = '';
       document.getElementById('sellDate').valueAsDate = new Date();
@@ -529,6 +573,7 @@
       document.getElementById('editBuyPlatform').value = record.buy_platform || '淘宝';
       document.getElementById('editGoodsCode').value = record.goods_code || '';
       document.getElementById('editGoodsDesc').value = record.goods_desc || '';
+      document.getElementById('editStatus').value = record.status || '运输中';
       document.getElementById('editQuantity').value = record.quantity || 1;
       document.getElementById('editCostPrice').value = record.cost_price ?? 0;
       document.getElementById('editSellDate').value = record.sell_date || '';
@@ -557,6 +602,7 @@
         buy_platform: document.getElementById('editBuyPlatform').value,
         goods_code: document.getElementById('editGoodsCode').value,
         goods_desc: document.getElementById('editGoodsDesc').value,
+        status: document.getElementById('editStatus').value || '运输中',
         quantity,
         cost_price: Number(cost_price.toFixed(2)),
         sell_date: document.getElementById('editSellDate').value || null,
@@ -584,7 +630,7 @@
     window.exportData = function () {
       if (!records || records.length === 0) return alert('暂无数据可导出');
 
-      let csv = '序号,购买日期,购买平台,货号,商品描述,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
+      let csv = '序号,购买日期,购买平台,货号,商品描述,库存状态,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
       records.forEach((r, idx) => {
         const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
         const sellDate = r.sell_date || '';
@@ -593,7 +639,7 @@
         const safeDesc = (r.goods_desc || '').replaceAll('"', '""');
         const safeRemark = (r.remark || '').replaceAll('"', '""');
 
-        csv += `${idx + 1},"${r.buy_date || ''}","${r.buy_platform || ''}","${r.goods_code || ''}","${safeDesc}",${r.quantity || 0},${Number(r.cost_price || 0).toFixed(2)},${Number(totalCost || 0).toFixed(2)},"${sellDate}",${sellPrice},${totalSell === null ? '' : Number(totalSell).toFixed(2)},${profit === null ? '' : profit.toFixed(2)},${profitRate === null ? '' : profitRate.toFixed(2)}%,"${safeRemark}"\n`;
+        csv += `${idx + 1},"${r.buy_date || ''}","${r.buy_platform || ''}","${r.goods_code || ''}","${safeDesc}","${(r.status || '运输中').replaceAll('"','""')}",${r.quantity || 0},${Number(r.cost_price || 0).toFixed(2)},${Number(totalCost || 0).toFixed(2)},"${sellDate}",${sellPrice},${totalSell === null ? '' : Number(totalSell).toFixed(2)},${profit === null ? '' : profit.toFixed(2)},${profitRate === null ? '' : profitRate.toFixed(2)}%,"${safeRemark}"\n`;
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -622,7 +668,7 @@
       if (!ok) return;
 
       try {
-        const text = await readFileAsText(file); // FileReader 读取文本 [web:357]
+        const text = await readFileAsText(file); // FileReader.readAsText [web:357]
         const rows = parseDelimitedTable(text);
         if (rows.length < 2) return alert('文件内容为空或格式不正确');
 
@@ -643,6 +689,7 @@
           const buy_platform = getCell(r, col, '购买平台');
           const goods_code = getCell(r, col, '货号');
           const goods_desc = getCell(r, col, '商品描述');
+          const status = getCell(r, col, '库存状态') || '运输中';
           const quantityStr = getCell(r, col, '件数');
           const costStr = getCell(r, col, '单件成本');
           const sell_date = getCell(r, col, '出售日期');
@@ -653,7 +700,7 @@
           const cost_price = parseFloat(costStr);
 
           if (!buy_date || !buy_platform || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost_price) || cost_price <= 0) {
-            continue; // 跳过不完整行
+            continue;
           }
 
           let sell_price = null;
@@ -668,6 +715,7 @@
             buy_platform: buy_platform.trim(),
             goods_code: (goods_code || '').trim(),
             goods_desc: (goods_desc || '').trim(),
+            status: (status || '运输中').trim(),
             quantity,
             cost_price: Number(cost_price.toFixed(2)),
             sell_date: sell_date ? normalizeDate(sell_date) : null,
@@ -683,7 +731,7 @@
 
         for (let start = 0; start < payloads.length; start += batchSize) {
           const batch = payloads.slice(start, start + batchSize);
-          const { error } = await supabase.from('purchases').insert(batch); // 批量 insert [web:362]
+          const { error } = await supabase.from('purchases').insert(batch); // bulk insert [web:358]
           if (error) throw new Error(error.message);
           inserted += batch.length;
         }
@@ -707,7 +755,7 @@
     function parseDelimitedTable(text) {
       const cleaned = String(text || '').replace(/^\uFEFF/, '').trim();
       if (!cleaned) return [];
-      const delimiter = cleaned.includes('\t') ? '\t' : ','; // 兼容 TSV/CSV
+      const delimiter = cleaned.includes('\t') ? '\t' : ',';
 
       const lines = cleaned.split(/\r?\n/);
       const rows = [];
@@ -762,12 +810,21 @@
       return v.replace(/[./]/g, '-');
     }
 
+    function escapeHtml(s) {
+      return String(s ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
     // ---------- 渲染 ----------
     function renderTable() {
       const tbody = document.getElementById('tableBody');
 
       if (!records || records.length === 0) {
-        tbody.innerHTML = '<tr class="empty-state"><td colspan="14">暂无数据，添加第一条记录吧 👆</td></tr>';
+        tbody.innerHTML = '<tr class="empty-state"><td colspan="15">暂无数据，添加第一条记录吧 👆</td></tr>';
         updateStats();
         return;
       }
@@ -785,15 +842,16 @@
         return `
           <tr>
             <td>${index + 1}</td>
-            <td>${r.buy_date || ''}</td>
-            <td>${r.buy_platform || ''}</td>
-            <td>${r.goods_code || ''}</td>
-            <td>${r.goods_desc || ''}</td>
-            <td>${r.quantity || 0}</td>
+            <td>${escapeHtml(r.buy_date || '')}</td>
+            <td>${escapeHtml(r.buy_platform || '')}</td>
+            <td>${escapeHtml(r.goods_code || '')}</td>
+            <td>${escapeHtml(r.goods_desc || '')}</td>
+            <td>${statusBadge(r.status)}</td>
+            <td>${Number(r.quantity || 0)}</td>
             <td>¥${Number(r.cost_price || 0).toFixed(2)}</td>
             <td>¥${Number(totalCost || 0).toFixed(2)}</td>
-            <td>${sellDateDisplay}</td>
-            <td>${sellPriceDisplay}</td>
+            <td>${escapeHtml(sellDateDisplay)}</td>
+            <td>${escapeHtml(sellPriceDisplay)}</td>
             <td>${totalSell === null ? '-' : `¥${Number(totalSell).toFixed(2)}`}</td>
             <td class="${profitClass}">${profitDisplay}</td>
             <td class="${profitClass}">${profitRateDisplay}</td>
@@ -833,7 +891,6 @@
       document.getElementById('avgProfitRate').textContent = avgProfitRate.toFixed(2) + '%';
     }
 
-    // 初次渲染
     renderTable();
   </script>
 </body>
