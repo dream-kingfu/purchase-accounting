@@ -120,6 +120,26 @@
       color: #333;
       white-space: nowrap;
     }
+
+    .filter-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 12px;
+      margin-top: 10px;
+    }
+    @media (max-width: 1024px){
+      .filter-grid{ grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 520px){
+      .filter-grid{ grid-template-columns: 1fr; }
+    }
+    .filter-actions{
+      display:flex;
+      gap:10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .filter-actions .btn{ width:auto; }
   </style>
 </head>
 
@@ -127,7 +147,7 @@
   <div class="container">
     <div class="header">
       <h1>📊 购销记账工具</h1>
-      <p>云端版（Supabase）- 多设备同步 / 每账号独立 + 库存状态</p>
+      <p>云端版（Supabase）- 多设备同步 / 每账号独立 + 库存状态 + 筛选</p>
     </div>
 
     <div class="auth-bar">
@@ -214,36 +234,41 @@
         <button class="btn btn-primary" onclick="addRecord()">添加记录</button>
       </div>
 
-      <!-- 数据统计 -->
+      <!-- 数据统计 + 状态统计 -->
       <div class="card">
         <h2>📈 数据统计</h2>
         <div style="padding: 20px 0;">
           <div style="margin-bottom: 20px;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总交易笔数</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">筛选后交易笔数</div>
             <div style="font-size: 28px; font-weight: 700; color: #667eea;" id="totalCount">0</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总件数</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">筛选后件数</div>
             <div style="font-size: 28px; font-weight: 700; color: #667eea;" id="totalQuantity">0</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总成本</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">筛选后总成本</div>
             <div style="font-size: 28px; font-weight: 700; color: #333;" id="totalCost">¥0.00</div>
           </div>
 
           <div style="margin-bottom: 20px;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总收益</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">筛选后总收益</div>
             <div style="font-size: 28px; font-weight: 700; color: #22c55e;" id="totalRevenue">¥0.00</div>
           </div>
 
           <div>
-            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">总利润 / 平均利润率</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">筛选后总利润 / 平均利润率</div>
             <div style="font-size: 20px; font-weight: 700; color: #764ba2;">
               <span id="totalProfit">¥0.00</span>
               <span style="margin-left: 8px;" id="avgProfitRate">0%</span>
             </div>
+          </div>
+
+          <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #eee;">
+            <div style="font-size: 12px; color: #666; margin-bottom: 10px;">各状态件数（筛选后）</div>
+            <div id="statusStats" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;"></div>
           </div>
         </div>
 
@@ -256,9 +281,62 @@
         <input id="importFile" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" class="hidden" />
       </div>
 
-      <!-- 记录列表 -->
+      <!-- 记录列表 + 筛选 -->
       <div class="card" style="grid-column: 1 / -1;">
         <h2>📋 交易记录</h2>
+
+        <div class="filter-grid">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>按库存状态筛选</label>
+            <select id="filterStatus">
+              <option value="全部">全部</option>
+              <option value="运输中">运输中</option>
+              <option value="在仓库">在仓库</option>
+              <option value="闪电仓">闪电仓</option>
+              <option value="已出售">已出售</option>
+              <option value="已打款">已打款</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <label>按平台筛选</label>
+            <select id="filterPlatform">
+              <option value="全部">全部</option>
+              <option value="淘宝">淘宝</option>
+              <option value="京东">京东</option>
+              <option value="拼多多">拼多多</option>
+              <option value="得物">得物</option>
+              <option value="抖音小店">抖音小店</option>
+              <option value="小红书">小红书</option>
+              <option value="亚马逊">亚马逊</option>
+              <option value="eBay">eBay</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <label>是否已售出</label>
+            <select id="filterSold">
+              <option value="全部">全部</option>
+              <option value="已售出">已售出（有售出价）</option>
+              <option value="未售出">未售出（无售出价）</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <label>关键字（货号/描述/备注）</label>
+            <input id="filterKeyword" type="text" placeholder="例如：DZ2024 / Nike / 补单" />
+          </div>
+        </div>
+
+        <div class="filter-actions">
+          <button class="btn btn-secondary" onclick="applyFilters()">应用筛选</button>
+          <button class="btn btn-secondary" onclick="resetFilters()">清空筛选</button>
+          <div style="align-self:center; font-size:12px; color:#666;">
+            当前显示：<span id="filteredCount">0</span> 条
+          </div>
+        </div>
+
         <div class="table-scroll">
           <table id="recordsTable">
             <thead>
@@ -400,18 +478,25 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    // === 你的 Supabase 信息 ===
     const SUPABASE_URL = "https://tpvodhwikbhigdxcthsk.supabase.co";
     const SUPABASE_KEY = "sb_publishable_kiSkcXCRrrfdbsOAfjuNnw_pSHDoTNa";
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY); // createClient(url,key) [web:208]
 
-    // 状态
     let records = [];
+    let filteredRecords = [];
     let editingRowId = null;
 
     // 初始化日期
     document.getElementById('buyDate').valueAsDate = new Date();
     document.getElementById('sellDate').valueAsDate = new Date();
+
+    // 过滤器：输入变化即应用（也保留按钮）
+    ['filterStatus','filterPlatform','filterSold','filterKeyword'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', () => applyFilters());
+      el.addEventListener('change', () => applyFilters());
+    });
 
     // ---------- UI ----------
     function showMsg(text) {
@@ -441,7 +526,6 @@
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value.trim();
       if (!email || !password) return alert('请输入邮箱和密码');
-
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) return alert(error.message);
       alert('注册成功。若启用邮箱验证，请先去邮箱确认后再登录。');
@@ -451,10 +535,8 @@
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value.trim();
       if (!email || !password) return alert('请输入邮箱和密码');
-
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return alert(error.message);
-
       window.closeAuthModal();
       await refreshRecords();
     };
@@ -462,6 +544,7 @@
     window.signOut = async function () {
       await supabase.auth.signOut();
       records = [];
+      filteredRecords = [];
       renderTable();
       setLoggedInUI(null);
     };
@@ -504,8 +587,10 @@
         .order('created_at', { ascending: false });
 
       if (error) return alert(error.message);
+
       records = data || [];
-      renderTable();
+      applyFilters(); // 自动刷新筛选结果并渲染
+      showMsg('✓ 已刷新云端数据');
     };
 
     window.addRecord = async function () {
@@ -546,7 +631,7 @@
         remark
       };
 
-      const { error } = await supabase.from('purchases').insert(payload); // insert() [web:279]
+      const { error } = await supabase.from('purchases').insert(payload); // insert [web:279]
       if (error) return alert(error.message);
 
       document.getElementById('buyDate').valueAsDate = new Date();
@@ -626,26 +711,86 @@
       await refreshRecords();
     };
 
-    // ---------- 导出 ----------
+    // ---------- 筛选 ----------
+    window.applyFilters = function () {
+      const status = document.getElementById('filterStatus').value;
+      const platform = document.getElementById('filterPlatform').value;
+      const sold = document.getElementById('filterSold').value;
+      const keyword = document.getElementById('filterKeyword').value.trim().toLowerCase();
+
+      filteredRecords = records.filter(r => {
+        if (status !== '全部' && (r.status || '运输中') !== status) return false;
+        if (platform !== '全部' && (r.buy_platform || '') !== platform) return false;
+
+        const hasSell = !(r.sell_price === null || r.sell_price === undefined || r.sell_price === '');
+        if (sold === '已售出' && !hasSell) return false;
+        if (sold === '未售出' && hasSell) return false;
+
+        if (keyword) {
+          const hay = `${r.goods_code || ''} ${r.goods_desc || ''} ${r.remark || ''}`.toLowerCase();
+          if (!hay.includes(keyword)) return false;
+        }
+        return true;
+      }); // 多条件 filter [web:474][web:489]
+
+      document.getElementById('filteredCount').textContent = filteredRecords.length;
+      renderTable();
+    };
+
+    window.resetFilters = function () {
+      document.getElementById('filterStatus').value = '全部';
+      document.getElementById('filterPlatform').value = '全部';
+      document.getElementById('filterSold').value = '全部';
+      document.getElementById('filterKeyword').value = '';
+      applyFilters();
+    };
+
+    // ---------- 状态统计（基于筛选后数据） ----------
+    function renderStatusStats() {
+      const container = document.getElementById('statusStats');
+      if (!container) return;
+
+      const order = ['运输中', '在仓库', '闪电仓', '已出售', '已打款'];
+
+      const counts = filteredRecords.reduce((acc, r) => {
+        const s = (r.status || '运输中').trim();
+        const q = Number(r.quantity || 0);
+        acc[s] = (acc[s] || 0) + (Number.isFinite(q) ? q : 0);
+        return acc;
+      }, {}); // reduce 聚合 [web:454][web:453]
+
+      container.innerHTML = order.map(s => {
+        const n = counts[s] || 0;
+        return `
+          <div style="border:1px solid #eee; border-radius:10px; padding:10px 12px; background:#fafafa;">
+            <div style="font-size:12px; color:#666; margin-bottom:6px;">${escapeHtml(s)}</div>
+            <div style="font-size:20px; font-weight:800; color:#333;">${n}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ---------- 导出（按筛选结果导出） ----------
     window.exportData = function () {
-      if (!records || records.length === 0) return alert('暂无数据可导出');
+      if (!filteredRecords || filteredRecords.length === 0) return alert('筛选结果为空，暂无数据可导出');
 
       let csv = '序号,购买日期,购买平台,货号,商品描述,库存状态,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
-      records.forEach((r, idx) => {
+      filteredRecords.forEach((r, idx) => {
         const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
         const sellDate = r.sell_date || '';
         const sellPrice = r.sell_price === null || r.sell_price === undefined ? '' : Number(r.sell_price).toFixed(2);
 
         const safeDesc = (r.goods_desc || '').replaceAll('"', '""');
         const safeRemark = (r.remark || '').replaceAll('"', '""');
+        const safeStatus = (r.status || '运输中').replaceAll('"', '""');
 
-        csv += `${idx + 1},"${r.buy_date || ''}","${r.buy_platform || ''}","${r.goods_code || ''}","${safeDesc}","${(r.status || '运输中').replaceAll('"','""')}",${r.quantity || 0},${Number(r.cost_price || 0).toFixed(2)},${Number(totalCost || 0).toFixed(2)},"${sellDate}",${sellPrice},${totalSell === null ? '' : Number(totalSell).toFixed(2)},${profit === null ? '' : profit.toFixed(2)},${profitRate === null ? '' : profitRate.toFixed(2)}%,"${safeRemark}"\n`;
+        csv += `${idx + 1},"${r.buy_date || ''}","${r.buy_platform || ''}","${r.goods_code || ''}","${safeDesc}","${safeStatus}",${r.quantity || 0},${Number(r.cost_price || 0).toFixed(2)},${Number(totalCost || 0).toFixed(2)},"${sellDate}",${sellPrice},${totalSell === null ? '' : Number(totalSell).toFixed(2)},${profit === null ? '' : profit.toFixed(2)},${profitRate === null ? '' : profitRate.toFixed(2)}%,"${safeRemark}"\n`;
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `购销记账_云端_${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `购销记账_云端_筛选导出_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
     };
 
@@ -731,7 +876,7 @@
 
         for (let start = 0; start < payloads.length; start += batchSize) {
           const batch = payloads.slice(start, start + batchSize);
-          const { error } = await supabase.from('purchases').insert(batch); // bulk insert [web:358]
+          const { error } = await supabase.from('purchases').insert(batch); // insert array [web:279]
           if (error) throw new Error(error.message);
           inserted += batch.length;
         }
@@ -813,85 +958,4 @@
     function escapeHtml(s) {
       return String(s ?? '')
         .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-    }
-
-    // ---------- 渲染 ----------
-    function renderTable() {
-      const tbody = document.getElementById('tableBody');
-
-      if (!records || records.length === 0) {
-        tbody.innerHTML = '<tr class="empty-state"><td colspan="15">暂无数据，添加第一条记录吧 👆</td></tr>';
-        updateStats();
-        return;
-      }
-
-      tbody.innerHTML = records.map((r, index) => {
-        const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
-
-        const profitClass = profit === null ? '' : (profit >= 0 ? 'profit-positive' : 'profit-negative');
-        const profitDisplay = profit === null ? '待定' : `¥${profit.toFixed(2)}`;
-        const profitRateDisplay = profitRate === null ? '待定' : `${profitRate.toFixed(2)}%`;
-
-        const sellDateDisplay = r.sell_date ? r.sell_date : '-';
-        const sellPriceDisplay = (r.sell_price === null || r.sell_price === undefined) ? '-' : `¥${Number(r.sell_price).toFixed(2)}`;
-
-        return `
-          <tr>
-            <td>${index + 1}</td>
-            <td>${escapeHtml(r.buy_date || '')}</td>
-            <td>${escapeHtml(r.buy_platform || '')}</td>
-            <td>${escapeHtml(r.goods_code || '')}</td>
-            <td>${escapeHtml(r.goods_desc || '')}</td>
-            <td>${statusBadge(r.status)}</td>
-            <td>${Number(r.quantity || 0)}</td>
-            <td>¥${Number(r.cost_price || 0).toFixed(2)}</td>
-            <td>¥${Number(totalCost || 0).toFixed(2)}</td>
-            <td>${escapeHtml(sellDateDisplay)}</td>
-            <td>${escapeHtml(sellPriceDisplay)}</td>
-            <td>${totalSell === null ? '-' : `¥${Number(totalSell).toFixed(2)}`}</td>
-            <td class="${profitClass}">${profitDisplay}</td>
-            <td class="${profitClass}">${profitRateDisplay}</td>
-            <td style="display:flex; gap:5px;">
-              <button class="btn btn-danger" style="flex:1; padding:6px 8px; font-size:11px;" onclick="editRecord(${r.id})">编辑</button>
-              <button class="btn btn-danger" style="flex:1; padding:6px 8px; font-size:11px; background:#ff6b6b;" onclick="deleteRecord(${r.id})">删除</button>
-            </td>
-          </tr>
-        `;
-      }).join('');
-
-      updateStats();
-    }
-
-    function updateStats() {
-      const totalCount = records.length;
-      const totalQuantity = records.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
-
-      const totalCost = records.reduce((sum, r) => {
-        const { totalCost } = calcDerived(r);
-        return sum + Number(totalCost || 0);
-      }, 0);
-
-      const totalRevenue = records.reduce((sum, r) => {
-        const { totalSell } = calcDerived(r);
-        return sum + Number(totalSell || 0);
-      }, 0);
-
-      const totalProfit = totalRevenue - totalCost;
-      const avgProfitRate = totalCost > 0 ? ((totalProfit / totalCost) * 100) : 0;
-
-      document.getElementById('totalCount').textContent = totalCount;
-      document.getElementById('totalQuantity').textContent = totalQuantity;
-      document.getElementById('totalCost').textContent = '¥' + totalCost.toFixed(2);
-      document.getElementById('totalRevenue').textContent = '¥' + totalRevenue.toFixed(2);
-      document.getElementById('totalProfit').textContent = '¥' + totalProfit.toFixed(2);
-      document.getElementById('avgProfitRate').textContent = avgProfitRate.toFixed(2) + '%';
-    }
-
-    renderTable();
-  </script>
-</body>
-</html>
+        .replaceAll('<', '&lt;
