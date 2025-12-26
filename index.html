@@ -478,6 +478,7 @@
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+    // === 你的 Supabase 信息 ===
     const SUPABASE_URL = "https://tpvodhwikbhigdxcthsk.supabase.co";
     const SUPABASE_KEY = "sb_publishable_kiSkcXCRrrfdbsOAfjuNnw_pSHDoTNa";
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY); // createClient(url,key) [web:208]
@@ -526,6 +527,7 @@
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value.trim();
       if (!email || !password) return alert('请输入邮箱和密码');
+
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) return alert(error.message);
       alert('注册成功。若启用邮箱验证，请先去邮箱确认后再登录。');
@@ -535,8 +537,10 @@
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value.trim();
       if (!email || !password) return alert('请输入邮箱和密码');
+
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return alert(error.message);
+
       window.closeAuthModal();
       await refreshRecords();
     };
@@ -549,6 +553,7 @@
       setLoggedInUI(null);
     };
 
+    // 监听登录状态变化（Supabase 推荐的事件方式）[web:662]
     supabase.auth.onAuthStateChange(async (_event, session) => {
       setLoggedInUI(session?.user ?? null);
       if (session?.user) await refreshRecords();
@@ -631,7 +636,7 @@
         remark
       };
 
-      const { error } = await supabase.from('purchases').insert(payload); // insert [web:279]
+      const { error } = await supabase.from('purchases').insert(payload);
       if (error) return alert(error.message);
 
       document.getElementById('buyDate').valueAsDate = new Date();
@@ -731,9 +736,8 @@
           if (!hay.includes(keyword)) return false;
         }
         return true;
-      }); // 多条件 filter [web:474][web:489]
+      });
 
-      document.getElementById('filteredCount').textContent = filteredRecords.length;
       renderTable();
     };
 
@@ -745,19 +749,19 @@
       applyFilters();
     };
 
-    // ---------- 状态统计（基于筛选后数据） ----------
+    // ---------- 状态统计 ----------
     function renderStatusStats() {
       const container = document.getElementById('statusStats');
       if (!container) return;
 
       const order = ['运输中', '在仓库', '闪电仓', '已出售', '已打款'];
 
-      const counts = filteredRecords.reduce((acc, r) => {
+      const counts = (filteredRecords || []).reduce((acc, r) => {
         const s = (r.status || '运输中').trim();
         const q = Number(r.quantity || 0);
         acc[s] = (acc[s] || 0) + (Number.isFinite(q) ? q : 0);
         return acc;
-      }, {}); // reduce 聚合 [web:454][web:453]
+      }, {});
 
       container.innerHTML = order.map(s => {
         const n = counts[s] || 0;
@@ -770,124 +774,89 @@
       }).join('');
     }
 
-    // ---------- 导出（按筛选结果导出） ----------
-    window.exportData = function () {
-      if (!filteredRecords || filteredRecords.length === 0) return alert('筛选结果为空，暂无数据可导出');
+    // ---------- 统计 ----------
+    function updateStats() {
+      const rows = filteredRecords || [];
 
-      let csv = '序号,购买日期,购买平台,货号,商品描述,库存状态,件数,单件成本,总成本,出售日期,单件售出价,总售出价,利润,利润率,备注\n';
-      filteredRecords.forEach((r, idx) => {
-        const { totalCost, totalSell, profit, profitRate } = calcDerived(r);
-        const sellDate = r.sell_date || '';
-        const sellPrice = r.sell_price === null || r.sell_price === undefined ? '' : Number(r.sell_price).toFixed(2);
+      document.getElementById('filteredCount').textContent = rows.length;
+      document.getElementById('totalCount').textContent = rows.length;
 
-        const safeDesc = (r.goods_desc || '').replaceAll('"', '""');
-        const safeRemark = (r.remark || '').replaceAll('"', '""');
-        const safeStatus = (r.status || '运输中').replaceAll('"', '""');
+      let totalQty = 0;
+      let totalCost = 0;
+      let totalRevenue = 0;
+      let totalProfit = 0;
+      let profitRateSum = 0;
+      let profitRateCount = 0;
 
-        csv += `${idx + 1},"${r.buy_date || ''}","${r.buy_platform || ''}","${r.goods_code || ''}","${safeDesc}","${safeStatus}",${r.quantity || 0},${Number(r.cost_price || 0).toFixed(2)},${Number(totalCost || 0).toFixed(2)},"${sellDate}",${sellPrice},${totalSell === null ? '' : Number(totalSell).toFixed(2)},${profit === null ? '' : profit.toFixed(2)},${profitRate === null ? '' : profitRate.toFixed(2)}%,"${safeRemark}"\n`;
+      rows.forEach(r => {
+        const q = Number(r.quantity || 0);
+        totalQty += Number.isFinite(q) ? q : 0;
+
+        const d = calcDerived(r);
+        totalCost += d.totalCost || 0;
+        if (d.totalSell !== null) totalRevenue += d.totalSell;
+        if (d.profit !== null) totalProfit += d.profit;
+        if (d.profitRate !== null) { profitRateSum += d.profitRate; profitRateCount++; }
       });
 
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `购销记账_云端_筛选导出_${new Date().toISOString().split('T')[0]}.csv`;
-      link.click();
-    };
+      document.getElementById('totalQuantity').textContent = totalQty;
+      document.getElementById('totalCost').textContent = `¥${totalCost.toFixed(2)}`;
+      document.getElementById('totalRevenue').textContent = `¥${totalRevenue.toFixed(2)}`;
+      document.getElementById('totalProfit').textContent = `¥${totalProfit.toFixed(2)}`;
+      document.getElementById('avgProfitRate').textContent =
+        `${profitRateCount ? (profitRateSum / profitRateCount).toFixed(2) : '0.00'}%`;
 
-    // ---------- 导入（CSV/TSV） ----------
-    const importInput = document.getElementById('importFile');
+      renderStatusStats();
+    }
 
-    window.triggerImport = function () {
-      importInput.value = '';
-      importInput.click();
-    };
+    // ---------- 表格渲染 ----------
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const rows = filteredRecords || [];
 
-    importInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return alert('请先登录');
-
-      const ok = confirm('确认导入？导入会把文件里的记录追加到云端（不会覆盖已有数据）。\n注意：重复导入同一个文件会产生重复数据。');
-      if (!ok) return;
-
-      try {
-        const text = await readFileAsText(file); // FileReader.readAsText [web:357]
-        const rows = parseDelimitedTable(text);
-        if (rows.length < 2) return alert('文件内容为空或格式不正确');
-
-        const header = rows[0];
-        const col = indexColumns(header);
-
-        const required = ['购买日期', '购买平台', '件数', '单件成本'];
-        for (const k of required) {
-          if (col[k] === undefined) return alert(`缺少列：${k}`);
-        }
-
-        const payloads = [];
-        for (let i = 1; i < rows.length; i++) {
-          const r = rows[i];
-          if (r.every(v => (v ?? '').trim() === '')) continue;
-
-          const buy_date = getCell(r, col, '购买日期');
-          const buy_platform = getCell(r, col, '购买平台');
-          const goods_code = getCell(r, col, '货号');
-          const goods_desc = getCell(r, col, '商品描述');
-          const status = getCell(r, col, '库存状态') || '运输中';
-          const quantityStr = getCell(r, col, '件数');
-          const costStr = getCell(r, col, '单件成本');
-          const sell_date = getCell(r, col, '出售日期');
-          const sellStr = getCell(r, col, '单件售出价');
-          const remark = getCell(r, col, '备注');
-
-          const quantity = parseInt(quantityStr, 10);
-          const cost_price = parseFloat(costStr);
-
-          if (!buy_date || !buy_platform || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost_price) || cost_price <= 0) {
-            continue;
-          }
-
-          let sell_price = null;
-          if (sellStr !== '') {
-            const s = parseFloat(sellStr);
-            sell_price = Number.isFinite(s) ? Number(s.toFixed(2)) : null;
-          }
-
-          payloads.push({
-            user_id: user.id,
-            buy_date: normalizeDate(buy_date),
-            buy_platform: buy_platform.trim(),
-            goods_code: (goods_code || '').trim(),
-            goods_desc: (goods_desc || '').trim(),
-            status: (status || '运输中').trim(),
-            quantity,
-            cost_price: Number(cost_price.toFixed(2)),
-            sell_date: sell_date ? normalizeDate(sell_date) : null,
-            sell_price,
-            remark: (remark || '').trim()
-          });
-        }
-
-        if (payloads.length === 0) return alert('没有可导入的有效数据（可能日期/件数/成本为空或格式不对）');
-
-        const batchSize = 200;
-        let inserted = 0;
-
-        for (let start = 0; start < payloads.length; start += batchSize) {
-          const batch = payloads.slice(start, start + batchSize);
-          const { error } = await supabase.from('purchases').insert(batch); // insert array [web:279]
-          if (error) throw new Error(error.message);
-          inserted += batch.length;
-        }
-
-        showMsg(`✓ 已导入 ${inserted} 条到云端`);
-        await refreshRecords();
-      } catch (err) {
-        alert('导入失败：' + (err?.message || String(err)));
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr class="empty-state"><td colspan="15">暂无数据（可能被筛选条件过滤）</td></tr>`;
+        updateStats();
+        return;
       }
-    });
 
+      tbody.innerHTML = rows.map((r, idx) => {
+        const d = calcDerived(r);
+
+        const totalSellText = d.totalSell === null ? '' : `¥${d.totalSell.toFixed(2)}`;
+        const profitText = d.profit === null ? '' : `¥${d.profit.toFixed(2)}`;
+        const profitRateText = d.profitRate === null ? '' : `${d.profitRate.toFixed(2)}%`;
+
+        const profitClass = (d.profit ?? 0) >= 0 ? 'profit-positive' : 'profit-negative';
+
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${escapeHtml(r.buy_date || '')}</td>
+            <td>${escapeHtml(r.buy_platform || '')}</td>
+            <td>${escapeHtml(r.goods_code || '')}</td>
+            <td>${escapeHtml(r.goods_desc || '')}</td>
+            <td>${statusBadge(r.status)}</td>
+            <td>${Number(r.quantity || 0)}</td>
+            <td>¥${Number(r.cost_price || 0).toFixed(2)}</td>
+            <td>¥${(d.totalCost || 0).toFixed(2)}</td>
+            <td>${escapeHtml(r.sell_date || '')}</td>
+            <td>${(r.sell_price === null || r.sell_price === undefined) ? '' : `¥${Number(r.sell_price).toFixed(2)}`}</td>
+            <td>${totalSellText}</td>
+            <td class="${profitClass}">${profitText}</td>
+            <td>${profitRateText}</td>
+            <td>
+              <button class="btn btn-secondary" style="padding:8px 12px; width:auto; font-size:12px;" onclick="editRecord(${r.id})">编辑</button>
+              <button class="btn btn-danger" onclick="deleteRecord(${r.id})">删除</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      updateStats();
+    }
+
+    // ---------- 导入（CSV/TSV）辅助 ----------
     function readFileAsText(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -955,7 +924,19 @@
       return v.replace(/[./]/g, '-');
     }
 
+    // ---------- 安全转义 ----------
     function escapeHtml(s) {
       return String(s ?? '')
         .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    // 页面首次：保持“未登录”时也能正常渲染空表
+    filteredRecords = [];
+    renderTable();
+  </script>
+</body>
+</html>
