@@ -166,8 +166,8 @@
     <div class="auth-bar">
       <div class="auth-info" id="authInfo">未登录：请先登录/注册</div>
       <div class="auth-actions">
-        <button class="btn btn-white" onclick="openAuthModal()">登录 / 注册</button>
-        <button class="btn btn-white" onclick="signOut()">退出登录</button>
+        <button class="btn btn-white" id="btnOpenAuth">登录 / 注册</button>
+        <button class="btn btn-white" id="btnSignOut">退出登录</button>
       </div>
     </div>
 
@@ -244,7 +244,7 @@
           <input type="text" id="remark" placeholder="其他说明" />
         </div>
 
-        <button class="btn btn-primary" onclick="addRecord()">添加记录</button>
+        <button class="btn btn-primary" id="btnAddRecord">添加记录</button>
       </div>
 
       <!-- 数据统计 + 状态统计 -->
@@ -286,12 +286,9 @@
         </div>
 
         <div class="btn-group">
-          <button class="btn btn-secondary" onclick="exportData()">📥 导出数据</button>
-
-          <!-- 最稳的导入触发：label for file input -->
+          <button class="btn btn-secondary" id="btnExport">📥 导出数据</button>
           <label class="btn btn-secondary" for="importFile">📤 导入数据</label>
-
-          <button class="btn btn-secondary" onclick="refreshRecords()">🔄 刷新云端数据</button>
+          <button class="btn btn-secondary" id="btnRefresh">🔄 刷新云端数据</button>
         </div>
 
         <input id="importFile" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" class="hidden" />
@@ -346,8 +343,8 @@
         </div>
 
         <div class="filter-actions">
-          <button class="btn btn-secondary" onclick="applyFilters()">应用筛选</button>
-          <button class="btn btn-secondary" onclick="resetFilters()">清空筛选</button>
+          <button class="btn btn-secondary" id="btnApplyFilters">应用筛选</button>
+          <button class="btn btn-secondary" id="btnResetFilters">清空筛选</button>
           <div style="align-self:center; font-size:12px; color:#666;">
             当前显示：<span id="filteredCount">0</span> 条
           </div>
@@ -387,7 +384,7 @@
     <!-- 登录/注册模态框 -->
     <div class="modal" id="authModal">
       <div class="modal-content">
-        <button class="modal-close" onclick="closeAuthModal()">×</button>
+        <button class="modal-close" id="btnCloseAuth">×</button>
         <div class="modal-header">登录 / 注册（Supabase）</div>
 
         <div class="form-group">
@@ -401,8 +398,8 @@
         </div>
 
         <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="signIn()">登录</button>
-          <button class="btn btn-primary" onclick="signUp()">注册</button>
+          <button class="btn btn-secondary" id="btnSignIn">登录</button>
+          <button class="btn btn-primary" id="btnSignUp">注册</button>
         </div>
 
         <div style="margin-top: 12px; font-size: 12px; color: #666; line-height: 1.6;">
@@ -414,7 +411,7 @@
     <!-- 编辑记录模态框 -->
     <div class="modal" id="editModal">
       <div class="modal-content">
-        <button class="modal-close" onclick="closeEditModal()">×</button>
+        <button class="modal-close" id="btnCloseEdit">×</button>
         <div class="modal-header">编辑记录</div>
 
         <div class="modal-body">
@@ -483,8 +480,8 @@
         </div>
 
         <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
-          <button class="btn btn-primary" onclick="saveRecord()">保存修改</button>
+          <button class="btn btn-secondary" id="btnCancelEdit">取消</button>
+          <button class="btn btn-primary" id="btnSaveRecord">保存修改</button>
         </div>
       </div>
     </div>
@@ -502,19 +499,13 @@
     let filteredRecords = [];
     let editingRowId = null;
 
-    // 初始化日期
-    document.getElementById('buyDate').valueAsDate = new Date();
-    document.getElementById('sellDate').valueAsDate = new Date();
+    // ========== 工具函数 ==========
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
 
-    // 过滤器：输入变化即应用
-    ['filterStatus','filterPlatform','filterSold','filterKeyword'].forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('input', () => window.applyFilters());
-      el.addEventListener('change', () => window.applyFilters());
-    });
-
-    // ---------- UI ----------
     function showMsg(text) {
       const msg = document.getElementById('successMsg');
       msg.textContent = text;
@@ -522,9 +513,18 @@
       setTimeout(() => msg.classList.remove('show'), 2200);
     }
 
-    window.openAuthModal = () => document.getElementById('authModal').classList.add('active');
-    window.closeAuthModal = () => document.getElementById('authModal').classList.remove('active');
+    // ========== 初始化 ==========
+    document.getElementById('buyDate').valueAsDate = new Date();
+    document.getElementById('sellDate').valueAsDate = new Date();
 
+    ['filterStatus','filterPlatform','filterSold','filterKeyword'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', applyFilters);
+      el.addEventListener('change', applyFilters);
+    });
+
+    // ========== UI控制 ==========
     function setLoggedInUI(user) {
       const info = document.getElementById('authInfo');
       const root = document.getElementById('appRoot');
@@ -537,8 +537,8 @@
       }
     }
 
-    // ---------- Auth ----------
-    window.signUp = async function () {
+    // ========== Auth ==========
+    async function signUp() {
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value.trim();
       if (!email || !password) return alert('请输入邮箱和密码');
@@ -546,9 +546,9 @@
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) return alert(error.message);
       alert('注册成功。若启用邮箱验证，请先去邮箱确认后再登录。');
-    };
+    }
 
-    window.signIn = async function () {
+    async function signIn() {
       const email = document.getElementById('authEmail').value.trim();
       const password = document.getElementById('authPassword').value.trim();
       if (!email || !password) return alert('请输入邮箱和密码');
@@ -556,28 +556,29 @@
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return alert(error.message);
 
-      window.closeAuthModal();
-      await window.refreshRecords();
-    };
+      document.getElementById('authModal').classList.remove('active');
+      await refreshRecords();
+    }
 
-    window.signOut = async function () {
+    async function signOut() {
       await supabase.auth.signOut();
       records = [];
       filteredRecords = [];
       renderTable();
       setLoggedInUI(null);
-    };
+    }
 
+    // 监听登录状态
     supabase.auth.onAuthStateChange(async (_event, session) => {
       setLoggedInUI(session?.user ?? null);
-      if (session?.user) await window.refreshRecords();
+      if (session?.user) await refreshRecords();
     });
 
     const { data: { session } } = await supabase.auth.getSession();
     setLoggedInUI(session?.user ?? null);
-    if (session?.user) await window.refreshRecords();
+    if (session?.user) await refreshRecords();
 
-    // ---------- 计算 ----------
+    // ========== 计算 ==========
     function calcDerived(record) {
       const q = Number(record.quantity || 0);
       const cost = Number(record.cost_price || 0);
@@ -595,8 +596,8 @@
       return `<span class="badge">${escapeHtml(s)}</span>`;
     }
 
-    // ---------- 云端读写 ----------
-    window.refreshRecords = async function () {
+    // ========== 云端读写 ==========
+    async function refreshRecords() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -608,11 +609,11 @@
       if (error) return alert(error.message);
 
       records = data || [];
-      window.applyFilters();
+      applyFilters();
       showMsg('✓ 已刷新云端数据');
-    };
+    }
 
-    window.addRecord = async function () {
+    async function addRecord() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return alert('请先登录');
 
@@ -665,10 +666,10 @@
       document.getElementById('remark').value = '';
 
       showMsg('✓ 云端记录已添加');
-      await window.refreshRecords();
-    };
+      await refreshRecords();
+    }
 
-    window.editRecord = function (rowId) {
+    function editRecord(rowId) {
       const record = records.find(r => r.id === rowId);
       if (!record) return;
 
@@ -684,14 +685,9 @@
       document.getElementById('editSellPrice').value = record.sell_price ?? '';
       document.getElementById('editRemark').value = record.remark || '';
       document.getElementById('editModal').classList.add('active');
-    };
+    }
 
-    window.closeEditModal = function () {
-      document.getElementById('editModal').classList.remove('active');
-      editingRowId = null;
-    };
-
-    window.saveRecord = async function () {
+    async function saveRecord() {
       if (editingRowId === null) return;
 
       const quantity = parseInt(document.getElementById('editQuantity').value, 10) || 0;
@@ -717,21 +713,22 @@
       const { error } = await supabase.from('purchases').update(updatePayload).eq('id', editingRowId);
       if (error) return alert(error.message);
 
-      window.closeEditModal();
+      document.getElementById('editModal').classList.remove('active');
+      editingRowId = null;
       showMsg('✓ 云端记录已更新');
-      await window.refreshRecords();
-    };
+      await refreshRecords();
+    }
 
-    window.deleteRecord = async function (rowId) {
+    async function deleteRecord(rowId) {
       if (!confirm('确认删除此记录？')) return;
       const { error } = await supabase.from('purchases').delete().eq('id', rowId);
       if (error) return alert(error.message);
       showMsg('✓ 云端记录已删除');
-      await window.refreshRecords();
-    };
+      await refreshRecords();
+    }
 
-    // ---------- 筛选 ----------
-    window.applyFilters = function () {
+    // ========== 筛选 ==========
+    function applyFilters() {
       const status = document.getElementById('filterStatus').value;
       const platform = document.getElementById('filterPlatform').value;
       const sold = document.getElementById('filterSold').value;
@@ -753,17 +750,17 @@
       });
 
       renderTable();
-    };
+    }
 
-    window.resetFilters = function () {
+    function resetFilters() {
       document.getElementById('filterStatus').value = '全部';
       document.getElementById('filterPlatform').value = '全部';
       document.getElementById('filterSold').value = '全部';
       document.getElementById('filterKeyword').value = '';
-      window.applyFilters();
-    };
+      applyFilters();
+    }
 
-    // ---------- 状态统计 ----------
+    // ========== 状态统计 ==========
     function renderStatusStats() {
       const container = document.getElementById('statusStats');
       if (!container) return;
@@ -788,7 +785,7 @@
       }).join('');
     }
 
-    // ---------- 统计 ----------
+    // ========== 统计 ==========
     function updateStats() {
       const rows = filteredRecords || [];
 
@@ -823,10 +820,186 @@
       renderStatusStats();
     }
 
-    // ---------- 表格渲染 ----------
+    // ========== 表格渲染 ==========
     function renderTable() {
       const tbody = document.getElementById('tableBody');
       const rows = filteredRecords || [];
 
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="empty-state"><td colspan="15">暂无数据（可能被筛选条件过滤）</td></tr
+        tbody.innerHTML = `<tr class="empty-state"><td colspan="15">暂无数据（可能被筛选条件过滤）</td></tr>`;
+        updateStats();
+        return;
+      }
+
+      tbody.innerHTML = rows.map((r, idx) => {
+        const d = calcDerived(r);
+
+        const totalSellText = d.totalSell === null ? '' : `¥${d.totalSell.toFixed(2)}`;
+        const profitText = d.profit === null ? '' : `¥${d.profit.toFixed(2)}`;
+        const profitRateText = d.profitRate === null ? '' : `${d.profitRate.toFixed(2)}%`;
+
+        const profitClass = (d.profit ?? 0) >= 0 ? 'profit-positive' : 'profit-negative';
+
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${escapeHtml(r.buy_date || '')}</td>
+            <td>${escapeHtml(r.buy_platform || '')}</td>
+            <td>${escapeHtml(r.goods_code || '')}</td>
+            <td>${escapeHtml(r.goods_desc || '')}</td>
+            <td>${statusBadge(r.status)}</td>
+            <td>${Number(r.quantity || 0)}</td>
+            <td>¥${Number(r.cost_price || 0).toFixed(2)}</td>
+            <td>¥${d.totalCost.toFixed(2)}</td>
+            <td>${escapeHtml(r.sell_date || '')}</td>
+            <td>${r.sell_price !== null && r.sell_price !== undefined ? `¥${Number(r.sell_price).toFixed(2)}` : ''}</td>
+            <td>${totalSellText}</td>
+            <td class="${profitClass}">${profitText}</td>
+            <td>${profitRateText}</td>
+            <td>
+              <button class="btn btn-danger" onclick="editRecord('${r.id}')">编辑</button>
+              <button class="btn btn-danger" onclick="deleteRecord('${r.id}')" style="margin-top: 4px;">删除</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      updateStats();
+    }
+
+    // ========== 导出数据 ==========
+    function exportData() {
+      const rows = filteredRecords || [];
+      if (rows.length === 0) return alert('没有数据可导出');
+
+      const headers = ['购买日期', '平台', '货号', '商品描述', '库存状态', '件数', '单件成本', '总成本', '出售日期', '单件售出价', '总售出价', '利润', '利润率', '备注'];
+      const csv = [headers.join('\t')];
+
+      rows.forEach(r => {
+        const d = calcDerived(r);
+        const row = [
+          r.buy_date || '',
+          r.buy_platform || '',
+          r.goods_code || '',
+          r.goods_desc || '',
+          r.status || '',
+          r.quantity || 0,
+          r.cost_price || 0,
+          d.totalCost.toFixed(2),
+          r.sell_date || '',
+          r.sell_price !== null && r.sell_price !== undefined ? r.sell_price.toFixed(2) : '',
+          d.totalSell !== null ? d.totalSell.toFixed(2) : '',
+          d.profit !== null ? d.profit.toFixed(2) : '',
+          d.profitRate !== null ? d.profitRate.toFixed(2) : '',
+          r.remark || ''
+        ];
+        csv.push(row.join('\t'));
+      });
+
+      const blob = new Blob([csv.join('\n')], { type: 'text/tab-separated-values;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `购销记账_${new Date().toISOString().split('T')[0]}.tsv`;
+      link.click();
+      showMsg('✓ 已导出数据');
+    }
+
+    // ========== 导入数据 ==========
+    document.getElementById('importFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const text = await file.text();
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+      if (lines.length < 2) return alert('文件格式不正确');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return alert('请先登录');
+
+      const headerLine = lines[0];
+      const isTab = headerLine.includes('\t');
+      const delimiter = isTab ? '\t' : ',';
+
+      const headers = headerLine.split(delimiter).map(h => h.trim());
+      const required = ['购买日期', '平台', '件数', '单件成本'];
+      const allPresent = required.every(h => headers.includes(h));
+      if (!allPresent) return alert(`文件必须包含列：${required.join('、')}`);
+
+      const rows = lines.slice(1).map(line => {
+        const cells = line.split(delimiter).map(c => c.trim());
+        const obj = {};
+        headers.forEach((h, i) => {
+          obj[h] = cells[i] || '';
+        });
+        return obj;
+      });
+
+      let success = 0;
+      for (const row of rows) {
+        try {
+          const payload = {
+            user_id: user.id,
+            buy_date: row['购买日期'] || '',
+            buy_platform: row['平台'] || '',
+            goods_code: row['货号'] || '',
+            goods_desc: row['商品描述'] || '',
+            status: row['库存状态'] || '运输中',
+            quantity: parseInt(row['件数'], 10) || 0,
+            cost_price: parseFloat(row['单件成本']) || 0,
+            sell_date: row['出售日期'] || null,
+            sell_price: row['单件售出价'] ? parseFloat(row['单件售出价']) : null,
+            remark: row['备注'] || ''
+          };
+
+          if (!payload.buy_date || !payload.buy_platform || !payload.quantity || !payload.cost_price) continue;
+
+          const { error } = await supabase.from('purchases').insert(payload);
+          if (!error) success++;
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      alert(`导入完成：${success}/${rows.length} 条记录`);
+      e.target.value = '';
+      await refreshRecords();
+    });
+
+    // ========== 事件绑定 ==========
+    document.getElementById('btnOpenAuth').addEventListener('click', () => {
+      document.getElementById('authModal').classList.add('active');
+    });
+
+    document.getElementById('btnCloseAuth').addEventListener('click', () => {
+      document.getElementById('authModal').classList.remove('active');
+    });
+
+    document.getElementById('btnSignUp').addEventListener('click', signUp);
+    document.getElementById('btnSignIn').addEventListener('click', signIn);
+    document.getElementById('btnSignOut').addEventListener('click', signOut);
+
+    document.getElementById('btnAddRecord').addEventListener('click', addRecord);
+    document.getElementById('btnExport').addEventListener('click', exportData);
+    document.getElementById('btnRefresh').addEventListener('click', refreshRecords);
+
+    document.getElementById('btnApplyFilters').addEventListener('click', applyFilters);
+    document.getElementById('btnResetFilters').addEventListener('click', resetFilters);
+
+    document.getElementById('btnCloseEdit').addEventListener('click', () => {
+      document.getElementById('editModal').classList.remove('active');
+      editingRowId = null;
+    });
+
+    document.getElementById('btnCancelEdit').addEventListener('click', () => {
+      document.getElementById('editModal').classList.remove('active');
+      editingRowId = null;
+    });
+
+    document.getElementById('btnSaveRecord').addEventListener('click', saveRecord);
+
+    // 暴露全局函数（给表格里的onclick用）
+    window.editRecord = editRecord;
+    window.deleteRecord = deleteRecord;
+  </script>
+</body>
+</html>
