@@ -234,6 +234,15 @@
         </div>
 
         <div class="form-group">
+          <label>付款方式</label>
+          <select id="paymentMethod">
+            <option value="自付">自付</option>
+            <option value="白条">白条</option>
+            <option value="花呗">花呗</option>
+          </select>
+        </div>
+
+        <div class="form-group">
           <label>出售日期 <span style="color: #999; font-weight: normal;">(可选)</span></label>
           <input type="date" id="sellDate" />
         </div>
@@ -367,6 +376,7 @@
                 <th>件数</th>
                 <th>单件成本</th>
                 <th>总成本</th>
+                <th>付款方式</th>
                 <th>出售日期</th>
                 <th>单件售出价</th>
                 <th>总售出价</th>
@@ -377,7 +387,7 @@
             </thead>
             <tbody id="tableBody">
               <tr class="empty-state">
-                <td colspan="15">暂无数据，添加第一条记录吧</td>
+                <td colspan="16">暂无数据，添加第一条记录吧</td>
               </tr>
             </tbody>
           </table>
@@ -466,6 +476,15 @@
           <div class="form-group">
             <label>单件成本价 (¥)</label>
             <input type="number" id="editCostPrice" step="0.01" min="0" />
+          </div>
+
+          <div class="form-group">
+            <label>付款方式</label>
+            <select id="editPaymentMethod">
+              <option value="自付">自付</option>
+              <option value="白条">白条</option>
+              <option value="花呗">花呗</option>
+            </select>
           </div>
 
           <div class="form-group">
@@ -655,7 +674,7 @@
       const rows = filteredRecords || [];
 
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="empty-state"><td colspan="15">暂无数据（可能被筛选条件过滤）</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-state"><td colspan="16">暂无数据（可能被筛选条件过滤）</td></tr>`;
         updateStats();
         return;
       }
@@ -680,6 +699,7 @@
             <td>${Number(r.quantity || 0)}</td>
             <td>¥${Number(r.cost_price || 0).toFixed(2)}</td>
             <td>¥${d.totalCost.toFixed(2)}</td>
+            <td>${escapeHtml(r.payment_method || '自付')}</td>
             <td>${escapeHtml(r.sell_date || '')}</td>
             <td>${r.sell_price !== null && r.sell_price !== undefined ? `¥${Number(r.sell_price).toFixed(2)}` : ''}</td>
             <td>${totalSellText}</td>
@@ -730,6 +750,7 @@
             status: item.get('status') || '运输中',
             quantity: item.get('quantity') || 0,
             cost_price: item.get('cost_price') || 0,
+            payment_method: item.get('payment_method') || '自付',
             sell_date: item.get('sell_date') || '',
             sell_price: (sp === undefined ? null : sp),
             remark: item.get('remark') || ''
@@ -757,6 +778,7 @@
 
       const quantity = parseInt(document.getElementById('quantity').value, 10) || 0;
       const cost_price = parseFloat(document.getElementById('costPrice').value) || 0;
+      const payment_method = document.getElementById('paymentMethod').value || '自付';
 
       const sell_date = document.getElementById('sellDate').value || '';
       const sellPriceInput = document.getElementById('sellPrice').value;
@@ -783,6 +805,7 @@
         record.set('status', status);
         record.set('quantity', quantity);
         record.set('cost_price', Number(cost_price.toFixed(2)));
+        record.set('payment_method', payment_method);
         record.set('sell_date', sell_date);
         record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
         record.set('remark', remark);
@@ -798,6 +821,7 @@
         document.getElementById('status').value = '运输中';
         document.getElementById('quantity').value = 1;
         document.getElementById('costPrice').value = '';
+        document.getElementById('paymentMethod').value = '自付';
         document.getElementById('sellDate').value = '';
         document.getElementById('sellPrice').value = '';
         document.getElementById('remark').value = '';
@@ -822,6 +846,7 @@
       document.getElementById('editStatus').value = record.status || '运输中';
       document.getElementById('editQuantity').value = record.quantity || 1;
       document.getElementById('editCostPrice').value = record.cost_price ?? 0;
+      document.getElementById('editPaymentMethod').value = record.payment_method || '自付';
       document.getElementById('editSellDate').value = record.sell_date || '';
       document.getElementById('editSellPrice').value = record.sell_price ?? '';
       document.getElementById('editRemark').value = record.remark || '';
@@ -850,6 +875,7 @@
         record.set('status', document.getElementById('editStatus').value || '运输中');
         record.set('quantity', quantity);
         record.set('cost_price', Number(cost_price.toFixed(2)));
+        record.set('payment_method', document.getElementById('editPaymentMethod').value || '自付');
         record.set('sell_date', document.getElementById('editSellDate').value || '');
         record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
         record.set('remark', document.getElementById('editRemark').value);
@@ -939,7 +965,7 @@
       const rows = filteredRecords || [];
       if (rows.length === 0) return alert('没有数据可导出');
 
-      const headers = ['购买日期', '平台', '货号', '商品描述', '库存状态', '件数', '单件成本', '总成本', '出售日期', '单件售出价', '总售出价', '利润', '利润率', '备注'];
+      const headers = ['购买日期', '平台', '货号', '商品描述', '库存状态', '件数', '单件成本', '总成本', '付款方式', '出售日期', '单件售出价', '总售出价', '利润', '利润率', '备注'];
       const csv = [headers.join('\t')];
 
       rows.forEach(r => {
@@ -953,6 +979,7 @@
           r.quantity || 0,
           r.cost_price || 0,
           d.totalCost.toFixed(2),
+          r.payment_method || '自付',
           r.sell_date || '',
           r.sell_price !== null && r.sell_price !== undefined ? r.sell_price.toFixed(2) : '',
           d.totalSell !== null ? d.totalSell.toFixed(2) : '',
@@ -1016,6 +1043,7 @@
           record.set('status', row['库存状态'] || '运输中');
           record.set('quantity', parseInt(row['件数'], 10) || 0);
           record.set('cost_price', parseFloat(row['单件成本']) || 0);
+          record.set('payment_method', row['付款方式'] || '自付');
           record.set('sell_date', row['出售日期'] || '');
           record.set('sell_price', row['单件售出价'] ? parseFloat(row['单件售出价']) : null);
           record.set('remark', row['备注'] || '');
