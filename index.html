@@ -803,7 +803,7 @@
         document.getElementById('remark').value = '';
 
         showMsg('✓ 记录已添加，正在刷新...');
-        await refreshRecords();
+        refreshRecords();
       } catch (err) {
         console.error('❌ 异常:', err);
         showMsg('操作失败：' + err.message, true);
@@ -859,7 +859,7 @@
         document.getElementById('editModal').classList.remove('active');
         editingRowId = null;
         showMsg('✓ 记录已更新');
-        await refreshRecords();
+        refreshRecords();
       } catch (err) {
         console.error('❌ 异常:', err);
         showMsg('操作失败：' + err.message, true);
@@ -876,7 +876,7 @@
         await record.destroy();
 
         showMsg('✓ 记录已删除');
-        await refreshRecords();
+        refreshRecords();
       } catch (err) {
         console.error('❌ 异常:', err);
         showMsg('操作失败：' + err.message, true);
@@ -899,7 +899,7 @@
         currentUser = AV.User.current();
         document.getElementById('authModal').classList.remove('active');
         setLoggedInUI(currentUser);
-        await refreshRecords(false);
+        refreshRecords(false);
       } catch (err) {
         alert('注册失败：' + err.message);
       }
@@ -915,7 +915,7 @@
         currentUser = user;
         document.getElementById('authModal').classList.remove('active');
         setLoggedInUI(currentUser);
-        await refreshRecords(false);
+        refreshRecords(false);
       } catch (err) {
         alert('登录失败：' + err.message);
       }
@@ -1029,7 +1029,7 @@
 
       alert(`导入完成：${success}/${rows.length} 条记录`);
       e.target.value = '';
-      await refreshRecords(false);
+      refreshRecords(false);
     });
 
     // ========== 初始化 ==========
@@ -1044,7 +1044,7 @@
     setLoggedInUI(currentUser);
     if (currentUser) {
       console.log('已检测到登录状态，正在加载数据...');
-      await refreshRecords(false);
+      refreshRecords(false);
     }
 
     // ========== 事件绑定 ==========
