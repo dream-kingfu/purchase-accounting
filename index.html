@@ -551,6 +551,11 @@
       if (user) {
         info.textContent = `已登录：${user.getUsername()}\n（数据在云端，换设备登录同账号即可同步）`;
         root.classList.remove('hidden');
+        // 登录成功后清空所有过滤条件
+        document.getElementById('filterStatus').value = '全部';
+        document.getElementById('filterPlatform').value = '全部';
+        document.getElementById('filterSold').value = '全部';
+        document.getElementById('filterKeyword').value = '';
       } else {
         info.textContent = '未登录：请先登录/注册';
         root.classList.add('hidden');
@@ -955,6 +960,14 @@
         filteredRecords = [];
         renderTable();
         setLoggedInUI(null);
+        // 清空所有筛选条件
+        document.getElementById('filterStatus').value = '全部';
+        document.getElementById('filterPlatform').value = '全部';
+        document.getElementById('filterSold').value = '全部';
+        document.getElementById('filterKeyword').value = '';
+        // 清空登录表单
+        document.getElementById('authEmail').value = '';
+        document.getElementById('authPassword').value = '';
       } catch (err) {
         alert('退出登录失败：' + err.message);
       }
