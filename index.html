@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>购销记账工具（云端 Supabase）</title>
+  <title>购销记账工具（云端 LeanCloud）</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -407,7 +407,7 @@
         </div>
 
         <div style="margin-top: 12px; font-size: 12px; color: #666; line-height: 1.6;">
-          如果你在 Supabase 开启了邮箱验证，注册后需要先去邮箱确认链接才能登录。
+          如你在 LeanCloud 开启了邮箱验证，注册后可能需要先去邮箱完成验证。
         </div>
       </div>
     </div>
@@ -492,14 +492,17 @@
 
   </div>
 
+  <!-- ✅ 先加载 LeanCloud SDK（一定要在你的业务脚本之前） -->
+  <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4/dist/av-min.js"></script>
+
+  <!-- ✅ 再加载你的业务代码 -->
   <script>
     // ========== LeanCloud 配置 ==========
-    const APP_ID = "RduftxqJEmEzb5TWtjpPQSgo-gzGzoHsz";        // 替换为你的 AppID
-    const APP_KEY = "IUFaRw1MluE2kOI0h1lyMnkf";      // 替换为你的 AppKey
-    const SERVER_URL = "https://api.leancloud.cn"; // 国内服务器
+    const APP_ID = "RduftxqJEmEzb5TWtjpPQSgo-gzGzoHsz";   // 替换为你的 AppID
+    const APP_KEY = "IUFaRw1MluE2kOI0h1lyMnkf"; // 替换为你的 AppKey
 
-    // 初始化 LeanCloud
-    AV.init({ appId: APP_ID, appKey: APP_KEY, serverURL: SERVER_URL });
+    // 初始化 LeanCloud（一般无需手动填 serverURL，除非你做了域名绑定/自定义 API 域名）
+    AV.init({ appId: APP_ID, appKey: APP_KEY });
 
     let records = [];
     let filteredRecords = [];
@@ -509,7 +512,7 @@
     // ========== 工具函数 ==========
     function escapeHtml(str) {
       const div = document.createElement('div');
-      div.textContent = str;
+      div.textContent = str ?? '';
       return div.innerHTML;
     }
 
@@ -554,7 +557,7 @@
       return `<span class="badge">${escapeHtml(s)}</span>`;
     }
 
-    // ========== 筛选（必须先定义） ==========
+    // ========== 筛选 ==========
     function applyFilters() {
       const status = document.getElementById('filterStatus').value;
       const platform = document.getElementById('filterPlatform').value;
@@ -695,6 +698,14 @@
       updateStats();
     }
 
+    // ========== ACL：确保“每账号独立” ==========
+    function buildOwnerACL(user) {
+      const acl = new AV.ACL(user);
+      acl.setPublicReadAccess(false);
+      acl.setPublicWriteAccess(false);
+      return acl;
+    }
+
     // ========== 云端读写 ==========
     async function refreshRecords(showMessage = false) {
       if (!currentUser) {
@@ -705,28 +716,34 @@
       try {
         const Purchase = AV.Object.extend('purchases');
         const query = new AV.Query(Purchase);
-        query.equalTo('user_id', currentUser.id);
+
+        // 用 owner 指针做隔离（更安全）
+        query.equalTo('owner', currentUser);
         query.descending('createdAt');
+
         const data = await query.find();
 
-        records = data.map(item => ({
-          id: item.id,
-          user_id: item.get('user_id'),
-          buy_date: item.get('buy_date') || '',
-          buy_platform: item.get('buy_platform') || '',
-          goods_code: item.get('goods_code') || '',
-          goods_desc: item.get('goods_desc') || '',
-          status: item.get('status') || '运输中',
-          quantity: item.get('quantity') || 0,
-          cost_price: item.get('cost_price') || 0,
-          sell_date: item.get('sell_date') || '',
-          sell_price: item.get('sell_price') || null,
-          remark: item.get('remark') || ''
-        }));
+        records = data.map(item => {
+          const sp = item.get('sell_price');
+          return {
+            id: item.id,
+            user_id: item.get('user_id') || '',
+            buy_date: item.get('buy_date') || '',
+            buy_platform: item.get('buy_platform') || '',
+            goods_code: item.get('goods_code') || '',
+            goods_desc: item.get('goods_desc') || '',
+            status: item.get('status') || '运输中',
+            quantity: item.get('quantity') || 0,
+            cost_price: item.get('cost_price') || 0,
+            sell_date: item.get('sell_date') || '',
+            sell_price: (sp === undefined ? null : sp),
+            remark: item.get('remark') || ''
+          };
+        });
 
         console.log(`✓ 成功从云端加载 ${records.length} 条记录`);
         applyFilters();
-        
+
         if (showMessage) showMsg('✓ 已刷新云端数据');
       } catch (err) {
         console.error('❌ 刷新失败:', err);
@@ -757,12 +774,15 @@
         return;
       }
 
-      console.log('📝 开始添加记录');
-
       try {
         const Purchase = AV.Object.extend('purchases');
         const record = new Purchase();
-        
+
+        // owner + ACL（关键：避免别人读取到你的数据）
+        record.set('owner', currentUser);
+        record.setACL(buildOwnerACL(currentUser));
+
+        // 业务字段
         record.set('user_id', currentUser.id);
         record.set('buy_date', buy_date);
         record.set('buy_platform', buy_platform);
@@ -774,11 +794,9 @@
         record.set('sell_date', sell_date);
         record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
         record.set('remark', remark);
-        
+
         await record.save();
 
-        console.log('✓ 记录添加成功');
-        
         document.getElementById('buyDate').valueAsDate = new Date();
         document.getElementById('buyPlatform').value = '';
         document.getElementById('goodsCode').value = '';
@@ -856,7 +874,7 @@
 
     async function deleteRecord(rowId) {
       if (!confirm('确认删除此记录？')) return;
-      
+
       try {
         const Purchase = AV.Object.extend('purchases');
         const query = new AV.Query(Purchase);
@@ -883,7 +901,7 @@
         user.setPassword(password);
         user.setEmail(email);
         await user.signUp();
-        
+
         currentUser = AV.User.current();
         document.getElementById('authModal').classList.remove('active');
         setLoggedInUI(currentUser);
@@ -922,14 +940,16 @@
       }
     }
 
-    // 初始化
+    // ✅ 初始化（修复顶层 await）
     console.log('🚀 应用正在初始化...');
-    currentUser = AV.User.current();
-    setLoggedInUI(currentUser);
-    if (currentUser) {
-      console.log('已检测到登录状态，正在加载数据...');
-      await refreshRecords(false);
-    }
+    (async () => {
+      currentUser = AV.User.current();
+      setLoggedInUI(currentUser);
+      if (currentUser) {
+        console.log('已检测到登录状态，正在加载数据...');
+        await refreshRecords(false);
+      }
+    })();
 
     // ========== 导出数据 ==========
     function exportData() {
@@ -951,7 +971,7 @@
           r.cost_price || 0,
           d.totalCost.toFixed(2),
           r.sell_date || '',
-          r.sell_price !== null && r.sell_price !== undefined ? r.sell_price.toFixed(2) : '',
+          r.sell_price !== null && r.sell_price !== undefined ? Number(r.sell_price).toFixed(2) : '',
           d.totalSell !== null ? d.totalSell.toFixed(2) : '',
           d.profit !== null ? d.profit.toFixed(2) : '',
           d.profitRate !== null ? d.profitRate.toFixed(2) : '',
@@ -991,9 +1011,7 @@
       const rows = lines.slice(1).map(line => {
         const cells = line.split(delimiter).map(c => c.trim());
         const obj = {};
-        headers.forEach((h, i) => {
-          obj[h] = cells[i] || '';
-        });
+        headers.forEach((h, i) => { obj[h] = cells[i] || ''; });
         return obj;
       });
 
@@ -1005,6 +1023,10 @@
           if (!row['购买日期'] || !row['平台'] || !row['件数'] || !row['单件成本']) continue;
 
           const record = new Purchase();
+
+          record.set('owner', currentUser);
+          record.setACL(buildOwnerACL(currentUser));
+
           record.set('user_id', currentUser.id);
           record.set('buy_date', row['购买日期']);
           record.set('buy_platform', row['平台']);
@@ -1065,7 +1087,6 @@
 
     document.getElementById('btnSaveRecord').addEventListener('click', saveRecord);
 
-    // 过滤器自动触发
     ['filterStatus','filterPlatform','filterSold','filterKeyword'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -1073,14 +1094,11 @@
       el.addEventListener('change', applyFilters);
     });
 
-    // 暴露全局函数（给表格里的onclick用）
     window.editRecord = editRecord;
     window.deleteRecord = deleteRecord;
 
     console.log('✅ 初始化完成！');
   </script>
-
-  <!-- LeanCloud SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/leancloud-js-sdk@4/dist/av-min.js"></script>
 </body>
 </html>
+
