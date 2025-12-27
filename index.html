@@ -105,6 +105,9 @@
     .success-message { background: #d4edda; color: #155724; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px; display: none; }
     .success-message.show { display: block; }
 
+    .error-message { background: #f8d7da; color: #721c24; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px; display: none; }
+    .error-message.show { display: block; }
+
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
     .modal.active { display: flex; }
     .modal-content { background: white; border-radius: 12px; padding: 30px; max-width: 560px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative; }
@@ -160,7 +163,7 @@
   <div class="container">
     <div class="header">
       <h1>📊 购销记账工具</h1>
-      <p>云端版（Supabase）- 多设备同步 / 每账号独立 + 库存状态 + 筛选</p>
+      <p>云端版（LeanCloud 国内版）- 多设备同步 / 每账号独立 + 库存状态 + 筛选</p>
     </div>
 
     <div class="auth-bar">
@@ -176,6 +179,7 @@
       <div class="card">
         <h2>➕ 添加新记录</h2>
         <div class="success-message" id="successMsg">✓ 操作成功</div>
+        <div class="error-message" id="errorMsg">✗ 操作失败</div>
 
         <div class="form-group">
           <label>购买日期</label>
@@ -385,7 +389,7 @@
     <div class="modal" id="authModal">
       <div class="modal-content">
         <button class="modal-close" id="btnCloseAuth">×</button>
-        <div class="modal-header">登录 / 注册（Supabase）</div>
+        <div class="modal-header">登录 / 注册（LeanCloud）</div>
 
         <div class="form-group">
           <label>邮箱</label>
@@ -488,16 +492,19 @@
 
   </div>
 
-  <script type="module">
-    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+  <script>
+    // ========== LeanCloud 配置 ==========
+    const APP_ID = "RduftxqJEmEzb5TWtjpPQSgo-gzGzoHsz";        // 替换为你的 AppID
+    const APP_KEY = "IUFaRw1MluE2kOI0h1lyMnkf";      // 替换为你的 AppKey
+    const SERVER_URL = "https://api.leancloud.cn"; // 国内服务器
 
-    const SUPABASE_URL = "https://tpvodhwikbhigdxcthsk.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_kiSkcXCRrrfdbsOAfjuNnw_pSHDoTNa";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    // 初始化 LeanCloud
+    AV.init({ appId: APP_ID, appKey: APP_KEY, serverURL: SERVER_URL });
 
     let records = [];
     let filteredRecords = [];
     let editingRowId = null;
+    let currentUser = null;
 
     // ========== 工具函数 ==========
     function escapeHtml(str) {
@@ -506,77 +513,28 @@
       return div.innerHTML;
     }
 
-    function showMsg(text) {
-      const msg = document.getElementById('successMsg');
+    function showMsg(text, isError = false) {
+      const msg = isError ? document.getElementById('errorMsg') : document.getElementById('successMsg');
       msg.textContent = text;
       msg.classList.add('show');
+      console.log(`[${isError ? 'ERROR' : 'SUCCESS'}] ${text}`);
       setTimeout(() => msg.classList.remove('show'), 2200);
     }
-
-    // ========== 初始化 ==========
-    document.getElementById('buyDate').valueAsDate = new Date();
-    document.getElementById('sellDate').valueAsDate = new Date();
-
-    ['filterStatus','filterPlatform','filterSold','filterKeyword'].forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('input', applyFilters);
-      el.addEventListener('change', applyFilters);
-    });
 
     // ========== UI控制 ==========
     function setLoggedInUI(user) {
       const info = document.getElementById('authInfo');
       const root = document.getElementById('appRoot');
       if (user) {
-        info.textContent = `已登录：${user.email}\n（数据在云端，换设备登录同账号即可同步）`;
+        info.textContent = `已登录：${user.getUsername()}\n（数据在云端，换设备登录同账号即可同步）`;
         root.classList.remove('hidden');
+        console.log('✓ UI已更新为登录状态');
       } else {
         info.textContent = '未登录：请先登录/注册';
         root.classList.add('hidden');
+        console.log('✓ UI已更新为未登录状态');
       }
     }
-
-    // ========== Auth ==========
-    async function signUp() {
-      const email = document.getElementById('authEmail').value.trim();
-      const password = document.getElementById('authPassword').value.trim();
-      if (!email || !password) return alert('请输入邮箱和密码');
-
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return alert(error.message);
-      alert('注册成功。若启用邮箱验证，请先去邮箱确认后再登录。');
-    }
-
-    async function signIn() {
-      const email = document.getElementById('authEmail').value.trim();
-      const password = document.getElementById('authPassword').value.trim();
-      if (!email || !password) return alert('请输入邮箱和密码');
-
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return alert(error.message);
-
-      document.getElementById('authModal').classList.remove('active');
-      await refreshRecords();
-    }
-
-    async function signOut() {
-      await supabase.auth.signOut();
-      records = [];
-      filteredRecords = [];
-      renderTable();
-      setLoggedInUI(null);
-    }
-
-    // 监听登录状态
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      setLoggedInUI(session?.user ?? null);
-      if (session?.user) await refreshRecords();
-    });
-
-    const { data: { session } } = await supabase.auth.getSession();
-    setLoggedInUI(session?.user ?? null);
-    if (session?.user) await refreshRecords();
 
     // ========== 计算 ==========
     function calcDerived(record) {
@@ -596,138 +554,7 @@
       return `<span class="badge">${escapeHtml(s)}</span>`;
     }
 
-    // ========== 云端读写 ==========
-    async function refreshRecords() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from('purchases')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) return alert(error.message);
-
-      records = data || [];
-      applyFilters();
-      showMsg('✓ 已刷新云端数据');
-    }
-
-    async function addRecord() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return alert('请先登录');
-
-      const buy_date = document.getElementById('buyDate').value;
-      const buy_platform = document.getElementById('buyPlatform').value;
-      const goods_code = document.getElementById('goodsCode').value;
-      const goods_desc = document.getElementById('goodsDesc').value;
-      const status = document.getElementById('status').value || '运输中';
-
-      const quantity = parseInt(document.getElementById('quantity').value, 10) || 0;
-      const cost_price = parseFloat(document.getElementById('costPrice').value) || 0;
-
-      const sell_date = document.getElementById('sellDate').value || null;
-      const sellPriceInput = document.getElementById('sellPrice').value;
-      const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
-
-      const remark = document.getElementById('remark').value;
-
-      if (!buy_date || !buy_platform || !quantity || !cost_price) {
-        alert('请填写必要信息：购买日期、平台、件数、成本价\n售出价可稍后添加');
-        return;
-      }
-
-      const payload = {
-        user_id: user.id,
-        buy_date,
-        buy_platform,
-        goods_code,
-        goods_desc,
-        status,
-        quantity,
-        cost_price: Number(cost_price.toFixed(2)),
-        sell_date,
-        sell_price: sell_price === null ? null : Number(sell_price.toFixed(2)),
-        remark
-      };
-
-      const { error } = await supabase.from('purchases').insert(payload);
-      if (error) return alert(error.message);
-
-      document.getElementById('buyDate').valueAsDate = new Date();
-      document.getElementById('buyPlatform').value = '';
-      document.getElementById('goodsCode').value = '';
-      document.getElementById('goodsDesc').value = '';
-      document.getElementById('status').value = '运输中';
-      document.getElementById('quantity').value = 1;
-      document.getElementById('costPrice').value = '';
-      document.getElementById('sellDate').valueAsDate = new Date();
-      document.getElementById('sellPrice').value = '';
-      document.getElementById('remark').value = '';
-
-      showMsg('✓ 云端记录已添加');
-      await refreshRecords();
-    }
-
-    function editRecord(rowId) {
-      const record = records.find(r => r.id === rowId);
-      if (!record) return;
-
-      editingRowId = rowId;
-      document.getElementById('editBuyDate').value = record.buy_date || '';
-      document.getElementById('editBuyPlatform').value = record.buy_platform || '淘宝';
-      document.getElementById('editGoodsCode').value = record.goods_code || '';
-      document.getElementById('editGoodsDesc').value = record.goods_desc || '';
-      document.getElementById('editStatus').value = record.status || '运输中';
-      document.getElementById('editQuantity').value = record.quantity || 1;
-      document.getElementById('editCostPrice').value = record.cost_price ?? 0;
-      document.getElementById('editSellDate').value = record.sell_date || '';
-      document.getElementById('editSellPrice').value = record.sell_price ?? '';
-      document.getElementById('editRemark').value = record.remark || '';
-      document.getElementById('editModal').classList.add('active');
-    }
-
-    async function saveRecord() {
-      if (editingRowId === null) return;
-
-      const quantity = parseInt(document.getElementById('editQuantity').value, 10) || 0;
-      const cost_price = parseFloat(document.getElementById('editCostPrice').value) || 0;
-      if (!quantity || !cost_price) return alert('请填写件数和成本价');
-
-      const sellPriceInput = document.getElementById('editSellPrice').value;
-      const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
-
-      const updatePayload = {
-        buy_date: document.getElementById('editBuyDate').value,
-        buy_platform: document.getElementById('editBuyPlatform').value,
-        goods_code: document.getElementById('editGoodsCode').value,
-        goods_desc: document.getElementById('editGoodsDesc').value,
-        status: document.getElementById('editStatus').value || '运输中',
-        quantity,
-        cost_price: Number(cost_price.toFixed(2)),
-        sell_date: document.getElementById('editSellDate').value || null,
-        sell_price: sell_price === null ? null : Number(sell_price.toFixed(2)),
-        remark: document.getElementById('editRemark').value
-      };
-
-      const { error } = await supabase.from('purchases').update(updatePayload).eq('id', editingRowId);
-      if (error) return alert(error.message);
-
-      document.getElementById('editModal').classList.remove('active');
-      editingRowId = null;
-      showMsg('✓ 云端记录已更新');
-      await refreshRecords();
-    }
-
-    async function deleteRecord(rowId) {
-      if (!confirm('确认删除此记录？')) return;
-      const { error } = await supabase.from('purchases').delete().eq('id', rowId);
-      if (error) return alert(error.message);
-      showMsg('✓ 云端记录已删除');
-      await refreshRecords();
-    }
-
-    // ========== 筛选 ==========
+    // ========== 筛选（必须先定义） ==========
     function applyFilters() {
       const status = document.getElementById('filterStatus').value;
       const platform = document.getElementById('filterPlatform').value;
@@ -749,6 +576,7 @@
         return true;
       });
 
+      console.log(`✓ 筛选完成，共 ${filteredRecords.length} 条记录`);
       renderTable();
     }
 
@@ -867,6 +695,242 @@
       updateStats();
     }
 
+    // ========== 云端读写 ==========
+    async function refreshRecords(showMessage = false) {
+      if (!currentUser) {
+        console.log('未登录，跳过刷新');
+        return;
+      }
+
+      try {
+        const Purchase = AV.Object.extend('purchases');
+        const query = new AV.Query(Purchase);
+        query.equalTo('user_id', currentUser.id);
+        query.descending('createdAt');
+        const data = await query.find();
+
+        records = data.map(item => ({
+          id: item.id,
+          user_id: item.get('user_id'),
+          buy_date: item.get('buy_date') || '',
+          buy_platform: item.get('buy_platform') || '',
+          goods_code: item.get('goods_code') || '',
+          goods_desc: item.get('goods_desc') || '',
+          status: item.get('status') || '运输中',
+          quantity: item.get('quantity') || 0,
+          cost_price: item.get('cost_price') || 0,
+          sell_date: item.get('sell_date') || '',
+          sell_price: item.get('sell_price') || null,
+          remark: item.get('remark') || ''
+        }));
+
+        console.log(`✓ 成功从云端加载 ${records.length} 条记录`);
+        applyFilters();
+        
+        if (showMessage) showMsg('✓ 已刷新云端数据');
+      } catch (err) {
+        console.error('❌ 刷新失败:', err);
+        if (showMessage) showMsg('刷新失败：' + err.message, true);
+      }
+    }
+
+    async function addRecord() {
+      if (!currentUser) return alert('请先登录');
+
+      const buy_date = document.getElementById('buyDate').value;
+      const buy_platform = document.getElementById('buyPlatform').value;
+      const goods_code = document.getElementById('goodsCode').value;
+      const goods_desc = document.getElementById('goodsDesc').value;
+      const status = document.getElementById('status').value || '运输中';
+
+      const quantity = parseInt(document.getElementById('quantity').value, 10) || 0;
+      const cost_price = parseFloat(document.getElementById('costPrice').value) || 0;
+
+      const sell_date = document.getElementById('sellDate').value || null;
+      const sellPriceInput = document.getElementById('sellPrice').value;
+      const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
+
+      const remark = document.getElementById('remark').value;
+
+      if (!buy_date || !buy_platform || !quantity || !cost_price) {
+        alert('请填写必要信息：购买日期、平台、件数、成本价\n售出价可稍后添加');
+        return;
+      }
+
+      console.log('📝 开始添加记录');
+
+      try {
+        const Purchase = AV.Object.extend('purchases');
+        const record = new Purchase();
+        
+        record.set('user_id', currentUser.id);
+        record.set('buy_date', buy_date);
+        record.set('buy_platform', buy_platform);
+        record.set('goods_code', goods_code);
+        record.set('goods_desc', goods_desc);
+        record.set('status', status);
+        record.set('quantity', quantity);
+        record.set('cost_price', Number(cost_price.toFixed(2)));
+        record.set('sell_date', sell_date);
+        record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
+        record.set('remark', remark);
+        
+        await record.save();
+
+        console.log('✓ 记录添加成功');
+        
+        document.getElementById('buyDate').valueAsDate = new Date();
+        document.getElementById('buyPlatform').value = '';
+        document.getElementById('goodsCode').value = '';
+        document.getElementById('goodsDesc').value = '';
+        document.getElementById('status').value = '运输中';
+        document.getElementById('quantity').value = 1;
+        document.getElementById('costPrice').value = '';
+        document.getElementById('sellDate').valueAsDate = new Date();
+        document.getElementById('sellPrice').value = '';
+        document.getElementById('remark').value = '';
+
+        showMsg('✓ 记录已添加，正在刷新...');
+        await refreshRecords();
+      } catch (err) {
+        console.error('❌ 异常:', err);
+        showMsg('操作失败：' + err.message, true);
+      }
+    }
+
+    function editRecord(rowId) {
+      const record = records.find(r => r.id === rowId);
+      if (!record) return;
+
+      editingRowId = rowId;
+      document.getElementById('editBuyDate').value = record.buy_date || '';
+      document.getElementById('editBuyPlatform').value = record.buy_platform || '淘宝';
+      document.getElementById('editGoodsCode').value = record.goods_code || '';
+      document.getElementById('editGoodsDesc').value = record.goods_desc || '';
+      document.getElementById('editStatus').value = record.status || '运输中';
+      document.getElementById('editQuantity').value = record.quantity || 1;
+      document.getElementById('editCostPrice').value = record.cost_price ?? 0;
+      document.getElementById('editSellDate').value = record.sell_date || '';
+      document.getElementById('editSellPrice').value = record.sell_price ?? '';
+      document.getElementById('editRemark').value = record.remark || '';
+      document.getElementById('editModal').classList.add('active');
+    }
+
+    async function saveRecord() {
+      if (editingRowId === null) return;
+
+      const quantity = parseInt(document.getElementById('editQuantity').value, 10) || 0;
+      const cost_price = parseFloat(document.getElementById('editCostPrice').value) || 0;
+      if (!quantity || !cost_price) return alert('请填写件数和成本价');
+
+      const sellPriceInput = document.getElementById('editSellPrice').value;
+      const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
+
+      try {
+        const Purchase = AV.Object.extend('purchases');
+        const query = new AV.Query(Purchase);
+        const record = await query.get(editingRowId);
+
+        record.set('buy_date', document.getElementById('editBuyDate').value);
+        record.set('buy_platform', document.getElementById('editBuyPlatform').value);
+        record.set('goods_code', document.getElementById('editGoodsCode').value);
+        record.set('goods_desc', document.getElementById('editGoodsDesc').value);
+        record.set('status', document.getElementById('editStatus').value || '运输中');
+        record.set('quantity', quantity);
+        record.set('cost_price', Number(cost_price.toFixed(2)));
+        record.set('sell_date', document.getElementById('editSellDate').value || null);
+        record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
+        record.set('remark', document.getElementById('editRemark').value);
+
+        await record.save();
+
+        document.getElementById('editModal').classList.remove('active');
+        editingRowId = null;
+        showMsg('✓ 记录已更新');
+        await refreshRecords();
+      } catch (err) {
+        console.error('❌ 异常:', err);
+        showMsg('操作失败：' + err.message, true);
+      }
+    }
+
+    async function deleteRecord(rowId) {
+      if (!confirm('确认删除此记录？')) return;
+      
+      try {
+        const Purchase = AV.Object.extend('purchases');
+        const query = new AV.Query(Purchase);
+        const record = await query.get(rowId);
+        await record.destroy();
+
+        showMsg('✓ 记录已删除');
+        await refreshRecords();
+      } catch (err) {
+        console.error('❌ 异常:', err);
+        showMsg('操作失败：' + err.message, true);
+      }
+    }
+
+    // ========== Auth ==========
+    async function signUp() {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
+      if (!email || !password) return alert('请输入邮箱和密码');
+
+      try {
+        const user = new AV.User();
+        user.setUsername(email);
+        user.setPassword(password);
+        user.setEmail(email);
+        await user.signUp();
+        
+        currentUser = AV.User.current();
+        document.getElementById('authModal').classList.remove('active');
+        setLoggedInUI(currentUser);
+        await refreshRecords(false);
+      } catch (err) {
+        alert('注册失败：' + err.message);
+      }
+    }
+
+    async function signIn() {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
+      if (!email || !password) return alert('请输入邮箱和密码');
+
+      try {
+        const user = await AV.User.logIn(email, password);
+        currentUser = user;
+        document.getElementById('authModal').classList.remove('active');
+        setLoggedInUI(currentUser);
+        await refreshRecords(false);
+      } catch (err) {
+        alert('登录失败：' + err.message);
+      }
+    }
+
+    async function signOut() {
+      try {
+        await AV.User.logOut();
+        currentUser = null;
+        records = [];
+        filteredRecords = [];
+        renderTable();
+        setLoggedInUI(null);
+      } catch (err) {
+        alert('退出登录失败：' + err.message);
+      }
+    }
+
+    // 初始化
+    console.log('🚀 应用正在初始化...');
+    currentUser = AV.User.current();
+    setLoggedInUI(currentUser);
+    if (currentUser) {
+      console.log('已检测到登录状态，正在加载数据...');
+      await refreshRecords(false);
+    }
+
     // ========== 导出数据 ==========
     function exportData() {
       const rows = filteredRecords || [];
@@ -913,8 +977,7 @@
       const lines = text.split('\n').map(l => l.trim()).filter(l => l);
       if (lines.length < 2) return alert('文件格式不正确');
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return alert('请先登录');
+      if (!currentUser) return alert('请先登录');
 
       const headerLine = lines[0];
       const isTab = headerLine.includes('\t');
@@ -935,35 +998,40 @@
       });
 
       let success = 0;
+      const Purchase = AV.Object.extend('purchases');
+
       for (const row of rows) {
         try {
-          const payload = {
-            user_id: user.id,
-            buy_date: row['购买日期'] || '',
-            buy_platform: row['平台'] || '',
-            goods_code: row['货号'] || '',
-            goods_desc: row['商品描述'] || '',
-            status: row['库存状态'] || '运输中',
-            quantity: parseInt(row['件数'], 10) || 0,
-            cost_price: parseFloat(row['单件成本']) || 0,
-            sell_date: row['出售日期'] || null,
-            sell_price: row['单件售出价'] ? parseFloat(row['单件售出价']) : null,
-            remark: row['备注'] || ''
-          };
+          if (!row['购买日期'] || !row['平台'] || !row['件数'] || !row['单件成本']) continue;
 
-          if (!payload.buy_date || !payload.buy_platform || !payload.quantity || !payload.cost_price) continue;
+          const record = new Purchase();
+          record.set('user_id', currentUser.id);
+          record.set('buy_date', row['购买日期']);
+          record.set('buy_platform', row['平台']);
+          record.set('goods_code', row['货号'] || '');
+          record.set('goods_desc', row['商品描述'] || '');
+          record.set('status', row['库存状态'] || '运输中');
+          record.set('quantity', parseInt(row['件数'], 10) || 0);
+          record.set('cost_price', parseFloat(row['单件成本']) || 0);
+          record.set('sell_date', row['出售日期'] || null);
+          record.set('sell_price', row['单件售出价'] ? parseFloat(row['单件售出价']) : null);
+          record.set('remark', row['备注'] || '');
 
-          const { error } = await supabase.from('purchases').insert(payload);
-          if (!error) success++;
+          await record.save();
+          success++;
         } catch (err) {
-          console.error(err);
+          console.error('导入行出错:', err);
         }
       }
 
       alert(`导入完成：${success}/${rows.length} 条记录`);
       e.target.value = '';
-      await refreshRecords();
+      await refreshRecords(false);
     });
+
+    // ========== 初始化日期 ==========
+    document.getElementById('buyDate').valueAsDate = new Date();
+    document.getElementById('sellDate').valueAsDate = new Date();
 
     // ========== 事件绑定 ==========
     document.getElementById('btnOpenAuth').addEventListener('click', () => {
@@ -980,7 +1048,7 @@
 
     document.getElementById('btnAddRecord').addEventListener('click', addRecord);
     document.getElementById('btnExport').addEventListener('click', exportData);
-    document.getElementById('btnRefresh').addEventListener('click', refreshRecords);
+    document.getElementById('btnRefresh').addEventListener('click', () => refreshRecords(true));
 
     document.getElementById('btnApplyFilters').addEventListener('click', applyFilters);
     document.getElementById('btnResetFilters').addEventListener('click', resetFilters);
@@ -997,9 +1065,22 @@
 
     document.getElementById('btnSaveRecord').addEventListener('click', saveRecord);
 
+    // 过滤器自动触发
+    ['filterStatus','filterPlatform','filterSold','filterKeyword'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', applyFilters);
+      el.addEventListener('change', applyFilters);
+    });
+
     // 暴露全局函数（给表格里的onclick用）
     window.editRecord = editRecord;
     window.deleteRecord = deleteRecord;
+
+    console.log('✅ 初始化完成！');
   </script>
+
+  <!-- LeanCloud SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/leancloud-js-sdk@4/dist/av-min.js"></script>
 </body>
 </html>
