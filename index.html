@@ -351,7 +351,7 @@
 
           <div class="form-group" style="margin-bottom:0;">
             <label>关键字（货号/描述/备注）</label>
-            <input id="filterKeyword" type="text" placeholder="例如：DZ2024 / Nike / 补单" />
+            <input id="filterKeyword" type="text" placeholder="例如：DZ2024 / Nike / 补单" value="" />
           </div>
         </div>
 
@@ -1068,12 +1068,17 @@
     // 售出日期保持空（未出售）
     document.getElementById('sellDate').value = '';
 
+    // 清空登录表单
+    document.getElementById('authEmail').value = '';
+    document.getElementById('authPassword').value = '';
+
     currentUser = AV.User.current();
     setLoggedInUI(currentUser);
     if (currentUser) {
       console.log('已检测到登录状态，正在加载数据...');
       refreshRecords(false);
     }
+</parameter>
 
     // ========== 事件绑定 ==========
     document.getElementById('btnOpenAuth').addEventListener('click', () => {
