@@ -808,7 +808,7 @@
         document.getElementById('status').value = '运输中';
         document.getElementById('quantity').value = 1;
         document.getElementById('costPrice').value = '';
-        document.getElementById('sellDate').valueAsDate = new Date();
+        document.getElementById('sellDate').value = "";       // 仍然保持未出售
         document.getElementById('sellPrice').value = '';
         document.getElementById('remark').value = '';
 
@@ -1053,11 +1053,11 @@
       alert(`导入完成：${success}/${rows.length} 条记录`);
       e.target.value = '';
       await refreshRecords(false);
-    });
+    });  
 
     // ========== 初始化日期 ==========
     document.getElementById('buyDate').valueAsDate = new Date();
-    document.getElementById('sellDate').valueAsDate = new Date();
+    document.getElementById('sellDate').value = "";      // 不自动填售出日期;  
 
     // ========== 事件绑定 ==========
     document.getElementById('btnOpenAuth').addEventListener('click', () => {
