@@ -157,7 +157,7 @@
     }
     .filter-actions .btn{ width:auto; }
 
-    /* 新增：回款统计卡片 */
+    /* 回款统计卡片 */
     .stats-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -185,6 +185,7 @@
     }
     .stat-box.positive .stat-box-value { color: #22c55e; }
     .stat-box.negative .stat-box-value { color: #ff6b6b; }
+    .stat-box.warning .stat-box-value { color: #f59e0b; }
   </style>
 </head>
 
@@ -326,9 +327,9 @@
             </div>
           </div>
 
-          <!-- 新增：回款统计 - 只统计已售出（有售出价）的记录 -->
+          <!-- 回款统计 -->
           <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #eee;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 12px; font-weight: 600;">📮 回款统计（仅统计已售出的记录，筛选后）</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 12px; font-weight: 600;">📮 回款统计（筛选后）</div>
             <div class="stats-grid">
               <div class="stat-box positive">
                 <div class="stat-box-title">已回款笔数</div>
@@ -339,11 +340,19 @@
                 <div class="stat-box-value" id="unpaidCount">0</div>
               </div>
               <div class="stat-box positive">
-                <div class="stat-box-title">已回款金额</div>
-                <div class="stat-box-value" id="paidAmount">¥0.00</div>
+                <div class="stat-box-title">已回款成本</div>
+                <div class="stat-box-value" id="paidCost">¥0.00</div>
               </div>
               <div class="stat-box negative">
-                <div class="stat-box-title">未回款金额</div>
+                <div class="stat-box-title">未回款成本</div>
+                <div class="stat-box-value" id="unpaidCost">¥0.00</div>
+              </div>
+              <div class="stat-box positive">
+                <div class="stat-box-title">已回款收益</div>
+                <div class="stat-box-value" id="paidAmount">¥0.00</div>
+              </div>
+              <div class="stat-box warning">
+                <div class="stat-box-title">未回款收益</div>
                 <div class="stat-box-value" id="unpaidAmount">¥0.00</div>
               </div>
             </div>
@@ -411,7 +420,7 @@
             <select id="filterPaymentStatus">
               <option value="全部">全部</option>
               <option value="已回款">已回款（已打款）</option>
-              <option value="未回款">未回款（非已打款）</option>
+              <option value="未回款">未回款（其他状态）</option>
             </select>
           </div>
 
@@ -662,9 +671,8 @@
         if (sold === '已售出' && !hasSell) return false;
         if (sold === '未售出' && hasSell) return false;
 
-        // 回款状态基于库存状态"已打款"，但只对已售出的记录适用
+        // 回款状态筛选
         if (paymentStatus !== '全部') {
-          if (!hasSell) return false; // 非已售出的记录不符合回款筛选
           const isPaid = (r.status || '运输中') === '已打款';
           if (paymentStatus === '已回款' && !isPaid) return false;
           if (paymentStatus === '未回款' && isPaid) return false;
@@ -714,7 +722,7 @@
       }).join('');
     }
 
-    // ========== 统计（包括回款统计 - 只统计已售出的记录）==========
+    // ========== 统计（包括回款统计）==========
     function updateStats() {
       const rows = filteredRecords || [];
 
@@ -729,6 +737,8 @@
       let profitRateCount = 0;
       let paidCount = 0;
       let unpaidCount = 0;
+      let paidCost = 0;      // 已回款对应的成本
+      let unpaidCost = 0;    // 未回款对应的成本
       let paidAmount = 0;
       let unpaidAmount = 0;
 
@@ -742,19 +752,20 @@
         if (d.profit !== null) totalProfit += d.profit;
         if (d.profitRate !== null) { profitRateSum += d.profitRate; profitRateCount++; }
 
-        // 回款统计：只统计有售出价（已售出）的记录
-        // 基于库存状态"已打款"判断是否已回款
+        // 回款统计：所有记录都参与统计
+        // 只有库存状态"已打款"才算已回款，其他状态（包括没有售出价）都算未回款
+        const isPaid = (r.status || '运输中') === '已打款';
         const hasSellPrice = !(r.sell_price === null || r.sell_price === undefined || r.sell_price === '');
-        if (hasSellPrice) {
-          const isPaid = (r.status || '运输中') === '已打款';
-          const saleAmount = d.totalSell || 0;
-          if (isPaid) {
-            paidCount++;
-            paidAmount += saleAmount;
-          } else {
-            unpaidCount++;
-            unpaidAmount += saleAmount;
-          }
+        const saleAmount = hasSellPrice ? (d.totalSell || 0) : 0;
+        
+        if (isPaid) {
+          paidCount++;
+          paidAmount += saleAmount;
+          paidCost += d.totalCost || 0;
+        } else {
+          unpaidCount++;
+          unpaidAmount += saleAmount;
+          unpaidCost += d.totalCost || 0;
         }
       });
 
@@ -768,6 +779,8 @@
       // 回款统计显示
       document.getElementById('paidCount').textContent = paidCount;
       document.getElementById('unpaidCount').textContent = unpaidCount;
+      document.getElementById('paidCost').textContent = `¥${paidCost.toFixed(2)}`;
+      document.getElementById('unpaidCost').textContent = `¥${unpaidCost.toFixed(2)}`;
       document.getElementById('paidAmount').textContent = `¥${paidAmount.toFixed(2)}`;
       document.getElementById('unpaidAmount').textContent = `¥${unpaidAmount.toFixed(2)}`;
 
