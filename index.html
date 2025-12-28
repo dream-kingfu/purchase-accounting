@@ -186,6 +186,16 @@
     .stat-box.positive .stat-box-value { color: #22c55e; }
     .stat-box.negative .stat-box-value { color: #ff6b6b; }
     .stat-box.warning .stat-box-value { color: #f59e0b; }
+
+    .divider-text {
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+      margin: 12px 0;
+      padding: 8px 0;
+      border-top: 1px dashed #ddd;
+      border-bottom: 1px dashed #ddd;
+    }
   </style>
 </head>
 
@@ -344,16 +354,29 @@
                 <div class="stat-box-value" id="paidCost">¥0.00</div>
               </div>
               <div class="stat-box negative">
-                <div class="stat-box-title">未回款成本</div>
+                <div class="stat-box-title">应收账款成本</div>
                 <div class="stat-box-value" id="unpaidCost">¥0.00</div>
               </div>
               <div class="stat-box positive">
-                <div class="stat-box-title">已回款收益</div>
+                <div class="stat-box-title">已回款金额</div>
                 <div class="stat-box-value" id="paidAmount">¥0.00</div>
               </div>
               <div class="stat-box warning">
-                <div class="stat-box-title">未回款收益</div>
+                <div class="stat-box-title">应收账款金额</div>
                 <div class="stat-box-value" id="unpaidAmount">¥0.00</div>
+              </div>
+            </div>
+
+            <!-- 应收账款细分 -->
+            <div class="divider-text">应收账款拆分（未回款 ¥<span id="unpaidCostDisplay">0.00</span>）</div>
+            <div class="stats-grid">
+              <div class="stat-box warning">
+                <div class="stat-box-title">已售出但未回款</div>
+                <div class="stat-box-value" id="unpaidSoldCost">¥0.00</div>
+              </div>
+              <div class="stat-box warning">
+                <div class="stat-box-title">未售出</div>
+                <div class="stat-box-value" id="unpaidUnsoldCost">¥0.00</div>
               </div>
             </div>
           </div>
@@ -737,10 +760,12 @@
       let profitRateCount = 0;
       let paidCount = 0;
       let unpaidCount = 0;
-      let paidCost = 0;      // 已回款对应的成本
-      let unpaidCost = 0;    // 未回款对应的成本
+      let paidCost = 0;
+      let unpaidCost = 0;
       let paidAmount = 0;
       let unpaidAmount = 0;
+      let unpaidSoldCost = 0;  // 已售出但未回款的成本
+      let unpaidUnsoldCost = 0; // 未售出的成本
 
       rows.forEach(r => {
         const q = Number(r.quantity || 0);
@@ -753,7 +778,6 @@
         if (d.profitRate !== null) { profitRateSum += d.profitRate; profitRateCount++; }
 
         // 回款统计：所有记录都参与统计
-        // 只有库存状态"已打款"才算已回款，其他状态（包括没有售出价）都算未回款
         const isPaid = (r.status || '运输中') === '已打款';
         const hasSellPrice = !(r.sell_price === null || r.sell_price === undefined || r.sell_price === '');
         const saleAmount = hasSellPrice ? (d.totalSell || 0) : 0;
@@ -764,8 +788,15 @@
           paidCost += d.totalCost || 0;
         } else {
           unpaidCount++;
-          unpaidAmount += saleAmount;
-          unpaidCost += d.totalCost || 0;
+          unpaidAmount += saleAmount;  // 应收账款金额：已售出但未回款的金额
+          unpaidCost += d.totalCost || 0;  // 应收账款成本：所有未回款的成本
+          
+          // 拆分：已售出 vs 未售出
+          if (hasSellPrice) {
+            unpaidSoldCost += d.totalCost || 0;
+          } else {
+            unpaidUnsoldCost += d.totalCost || 0;
+          }
         }
       });
 
@@ -783,6 +814,11 @@
       document.getElementById('unpaidCost').textContent = `¥${unpaidCost.toFixed(2)}`;
       document.getElementById('paidAmount').textContent = `¥${paidAmount.toFixed(2)}`;
       document.getElementById('unpaidAmount').textContent = `¥${unpaidAmount.toFixed(2)}`;
+      
+      // 应收账款拆分
+      document.getElementById('unpaidCostDisplay').textContent = unpaidCost.toFixed(2);
+      document.getElementById('unpaidSoldCost').textContent = `¥${unpaidSoldCost.toFixed(2)}`;
+      document.getElementById('unpaidUnsoldCost').textContent = `¥${unpaidUnsoldCost.toFixed(2)}`;
 
       renderStatusStats();
     }
