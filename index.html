@@ -326,9 +326,9 @@
             </div>
           </div>
 
-          <!-- 新增：回款统计 - 参考"已打款"状态 -->
+          <!-- 新增：回款统计 - 只统计已售出（有售出价）的记录 -->
           <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #eee;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 12px; font-weight: 600;">📮 回款统计（基于"已打款"状态，筛选后）</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 12px; font-weight: 600;">📮 回款统计（仅统计已售出的记录，筛选后）</div>
             <div class="stats-grid">
               <div class="stat-box positive">
                 <div class="stat-box-title">已回款笔数</div>
@@ -662,8 +662,9 @@
         if (sold === '已售出' && !hasSell) return false;
         if (sold === '未售出' && hasSell) return false;
 
-        // 回款状态基于库存状态"已打款"
+        // 回款状态基于库存状态"已打款"，但只对已售出的记录适用
         if (paymentStatus !== '全部') {
+          if (!hasSell) return false; // 非已售出的记录不符合回款筛选
           const isPaid = (r.status || '运输中') === '已打款';
           if (paymentStatus === '已回款' && !isPaid) return false;
           if (paymentStatus === '未回款' && isPaid) return false;
@@ -713,7 +714,7 @@
       }).join('');
     }
 
-    // ========== 统计（包括回款统计 - 基于"已打款"状态）==========
+    // ========== 统计（包括回款统计 - 只统计已售出的记录）==========
     function updateStats() {
       const rows = filteredRecords || [];
 
@@ -741,15 +742,19 @@
         if (d.profit !== null) totalProfit += d.profit;
         if (d.profitRate !== null) { profitRateSum += d.profitRate; profitRateCount++; }
 
-        // 回款统计：基于库存状态"已打款"
-        const isPaid = (r.status || '运输中') === '已打款';
-        const saleAmount = d.totalSell || 0;
-        if (isPaid) {
-          paidCount++;
-          paidAmount += saleAmount;
-        } else {
-          unpaidCount++;
-          unpaidAmount += saleAmount;
+        // 回款统计：只统计有售出价（已售出）的记录
+        // 基于库存状态"已打款"判断是否已回款
+        const hasSellPrice = !(r.sell_price === null || r.sell_price === undefined || r.sell_price === '');
+        if (hasSellPrice) {
+          const isPaid = (r.status || '运输中') === '已打款';
+          const saleAmount = d.totalSell || 0;
+          if (isPaid) {
+            paidCount++;
+            paidAmount += saleAmount;
+          } else {
+            unpaidCount++;
+            unpaidAmount += saleAmount;
+          }
         }
       });
 
