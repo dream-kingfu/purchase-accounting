@@ -156,6 +156,35 @@
       flex-wrap: wrap;
     }
     .filter-actions .btn{ width:auto; }
+
+    /* 新增：回款统计卡片 */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+    .stat-box {
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 15px;
+      background: #fafafa;
+    }
+    .stat-box-title {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+    .stat-box-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #333;
+    }
+    .stat-box.positive .stat-box-value { color: #22c55e; }
+    .stat-box.negative .stat-box-value { color: #ff6b6b; }
   </style>
 </head>
 
@@ -163,7 +192,7 @@
   <div class="container">
     <div class="header">
       <h1>📊 购销记账工具</h1>
-      <p>云端版（LeanCloud 国内版）- 多设备同步 / 每账号独立 + 库存状态 + 筛选</p>
+      <p>云端版（LeanCloud 国内版）- 多设备同步 / 每账号独立 + 库存状态 + 运费 + 回款统计</p>
     </div>
 
     <div class="auth-bar">
@@ -234,6 +263,11 @@
         </div>
 
         <div class="form-group">
+          <label>运费 (¥) <span style="color: #999; font-weight: normal;\">(可选)</span></label>
+          <input type="number" id="shippingFee" placeholder="0.00" step="0.01" min="0" />
+        </div>
+
+        <div class="form-group">
           <label>付款方式</label>
           <select id="paymentMethod">
             <option value="自付">自付</option>
@@ -243,13 +277,21 @@
         </div>
 
         <div class="form-group">
-          <label>出售日期 <span style="color: #999; font-weight: normal;">(可选)</span></label>
+          <label>出售日期 <span style="color: #999; font-weight: normal;\">(可选)</span></label>
           <input type="date" id="sellDate" />
         </div>
 
         <div class="form-group">
-          <label>单件售出价 <span style="color: #999; font-weight: normal;">(可选)</span></label>
+          <label>单件售出价 <span style="color: #999; font-weight: normal;\">(可选)</span></label>
           <input type="number" id="sellPrice" placeholder="待填写" step="0.01" min="0" />
+        </div>
+
+        <div class="form-group">
+          <label>是否已回款</label>
+          <select id="isPaidBack">
+            <option value="否">否</option>
+            <option value="是">是</option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -275,7 +317,7 @@
           </div>
 
           <div style="margin-bottom: 20px;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">筛选后总成本</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 5px;">筛选后总成本（含运费）</div>
             <div style="font-size: 28px; font-weight: 700; color: #333;" id="totalCost">¥0.00</div>
           </div>
 
@@ -289,6 +331,29 @@
             <div style="font-size: 20px; font-weight: 700; color: #764ba2;">
               <span id="totalProfit">¥0.00</span>
               <span style="margin-left: 8px;" id="avgProfitRate">0%</span>
+            </div>
+          </div>
+
+          <!-- 新增：回款统计 -->
+          <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #eee;">
+            <div style="font-size: 12px; color: #666; margin-bottom: 12px; font-weight: 600;">📮 回款统计（筛选后）</div>
+            <div class="stats-grid">
+              <div class="stat-box positive">
+                <div class="stat-box-title">已回款笔数</div>
+                <div class="stat-box-value" id="paidCount">0</div>
+              </div>
+              <div class="stat-box negative">
+                <div class="stat-box-title">未回款笔数</div>
+                <div class="stat-box-value" id="unpaidCount">0</div>
+              </div>
+              <div class="stat-box positive">
+                <div class="stat-box-title">已回款金额</div>
+                <div class="stat-box-value" id="paidAmount">¥0.00</div>
+              </div>
+              <div class="stat-box negative">
+                <div class="stat-box-title">未回款金额</div>
+                <div class="stat-box-value" id="unpaidAmount">¥0.00</div>
+              </div>
             </div>
           </div>
 
@@ -350,6 +415,15 @@
           </div>
 
           <div class="form-group" style="margin-bottom:0;">
+            <label>回款状态</label>
+            <select id="filterPaymentStatus">
+              <option value="全部">全部</option>
+              <option value="已回款">已回款</option>
+              <option value="未回款">未回款</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0; grid-column: 1 / -1;">
             <label>关键字（货号/描述/备注）</label>
             <input id="filterKeyword" type="text" placeholder="例如：DZ2024 / Nike / 补单" value="" />
           </div>
@@ -375,6 +449,7 @@
                 <th>库存状态</th>
                 <th>件数</th>
                 <th>单件成本</th>
+                <th>运费</th>
                 <th>总成本</th>
                 <th>付款方式</th>
                 <th>出售日期</th>
@@ -382,12 +457,13 @@
                 <th>总售出价</th>
                 <th>利润</th>
                 <th>利润率</th>
+                <th>回款状态</th>
                 <th style="width: 120px;">操作</th>
               </tr>
             </thead>
             <tbody id="tableBody">
               <tr class="empty-state">
-                <td colspan="16">暂无数据，添加第一条记录吧</td>
+                <td colspan="18">暂无数据，添加第一条记录吧</td>
               </tr>
             </tbody>
           </table>
@@ -479,6 +555,11 @@
           </div>
 
           <div class="form-group">
+            <label>运费 (¥)</label>
+            <input type="number" id="editShippingFee" step="0.01" min="0" />
+          </div>
+
+          <div class="form-group">
             <label>付款方式</label>
             <select id="editPaymentMethod">
               <option value="自付">自付</option>
@@ -494,6 +575,14 @@
           <div class="form-group">
             <label>单件售出价 (¥)</label>
             <input type="number" id="editSellPrice" step="0.01" min="0" />
+          </div>
+
+          <div class="form-group">
+            <label>是否已回款</label>
+            <select id="editIsPaidBack">
+              <option value="否">否</option>
+              <option value="是">是</option>
+            </select>
           </div>
 
           <div class="form-group" style="grid-column: 1 / -1;">
@@ -516,12 +605,10 @@
 
   <script>
     // ========== LeanCloud 配置（国内版 CN）==========
-    // ⚠️ 必须改这三个值：从控制台复制你的 AppID、AppKey、Server URL
-    const APP_ID = "RduftxqJEmEzb5TWtjpPQSgo-gzGzoHsz";                    // 改成你的 AppID
-    const APP_KEY = "IUFaRw1MluE2kOI0h1lyMnkf";                  // 改成你的 AppKey
-    const SERVER_URL = "https://rduftxqj.lc-cn-n1-shared.com";   // 改成你的 Server URL（控制台获取）
+    const APP_ID = "RduftxqJEmEzb5TWtjpPQSgo-gzGzoHsz";
+    const APP_KEY = "IUFaRw1MluE2kOI0h1lyMnkf";
+    const SERVER_URL = "https://rduftxqj.lc-cn-n1-shared.com";
 
-    // 初始化 LeanCloud（国内版必须提供 serverURL）
     AV.init({ appId: APP_ID, appKey: APP_KEY, serverURL: SERVER_URL });
 
     let records = [];
@@ -561,9 +648,10 @@
     function calcDerived(record) {
       const q = Number(record.quantity || 0);
       const cost = Number(record.cost_price || 0);
+      const shipping = Number(record.shipping_fee || 0);
       const sell = record.sell_price === null || record.sell_price === undefined ? null : Number(record.sell_price);
 
-      const totalCost = cost * q;
+      const totalCost = (cost + shipping) * q;
       const totalSell = sell === null || Number.isNaN(sell) ? null : (sell * q);
       const profit = totalSell === null ? null : (totalSell - totalCost);
       const profitRate = totalSell === null || totalCost <= 0 ? null : (profit / totalCost * 100);
@@ -575,11 +663,19 @@
       return `<span class="badge">${escapeHtml(s)}</span>`;
     }
 
+    function paymentStatusBadge(isPaidBack) {
+      const status = (isPaidBack || '否').trim();
+      const bgColor = status === '是' ? '#d4edda' : '#fff3cd';
+      const textColor = status === '是' ? '#155724' : '#856404';
+      return `<span style="background: ${bgColor}; color: ${textColor}; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #ddd; white-space: nowrap;">${status === '是' ? '✓ 已回款' : '✗ 未回款'}</span>`;
+    }
+
     // ========== 筛选 ==========
     function applyFilters() {
       const status = document.getElementById('filterStatus').value;
       const platform = document.getElementById('filterPlatform').value;
       const sold = document.getElementById('filterSold').value;
+      const paymentStatus = document.getElementById('filterPaymentStatus').value;
       const keyword = document.getElementById('filterKeyword').value.trim().toLowerCase();
 
       filteredRecords = records.filter(r => {
@@ -589,6 +685,12 @@
         const hasSell = !(r.sell_price === null || r.sell_price === undefined || r.sell_price === '');
         if (sold === '已售出' && !hasSell) return false;
         if (sold === '未售出' && hasSell) return false;
+
+        if (paymentStatus !== '全部') {
+          const isPaid = (r.is_paid_back || '否') === '是';
+          if (paymentStatus === '已回款' && !isPaid) return false;
+          if (paymentStatus === '未回款' && isPaid) return false;
+        }
 
         if (keyword) {
           const hay = `${r.goods_code || ''} ${r.goods_desc || ''} ${r.remark || ''}`.toLowerCase();
@@ -604,6 +706,7 @@
       document.getElementById('filterStatus').value = '全部';
       document.getElementById('filterPlatform').value = '全部';
       document.getElementById('filterSold').value = '全部';
+      document.getElementById('filterPaymentStatus').value = '全部';
       document.getElementById('filterKeyword').value = '';
       applyFilters();
     }
@@ -633,7 +736,7 @@
       }).join('');
     }
 
-    // ========== 统计 ==========
+    // ========== 统计（包括回款统计）==========
     function updateStats() {
       const rows = filteredRecords || [];
 
@@ -646,6 +749,10 @@
       let totalProfit = 0;
       let profitRateSum = 0;
       let profitRateCount = 0;
+      let paidCount = 0;
+      let unpaidCount = 0;
+      let paidAmount = 0;
+      let unpaidAmount = 0;
 
       rows.forEach(r => {
         const q = Number(r.quantity || 0);
@@ -656,6 +763,17 @@
         if (d.totalSell !== null) totalRevenue += d.totalSell;
         if (d.profit !== null) totalProfit += d.profit;
         if (d.profitRate !== null) { profitRateSum += d.profitRate; profitRateCount++; }
+
+        // 回款统计
+        const isPaid = (r.is_paid_back || '否') === '是';
+        const saleAmount = d.totalSell || 0;
+        if (isPaid) {
+          paidCount++;
+          paidAmount += saleAmount;
+        } else {
+          unpaidCount++;
+          unpaidAmount += saleAmount;
+        }
       });
 
       document.getElementById('totalQuantity').textContent = totalQty;
@@ -664,6 +782,12 @@
       document.getElementById('totalProfit').textContent = `¥${totalProfit.toFixed(2)}`;
       document.getElementById('avgProfitRate').textContent =
         `${profitRateCount ? (profitRateSum / profitRateCount).toFixed(2) : '0.00'}%`;
+
+      // 回款统计显示
+      document.getElementById('paidCount').textContent = paidCount;
+      document.getElementById('unpaidCount').textContent = unpaidCount;
+      document.getElementById('paidAmount').textContent = `¥${paidAmount.toFixed(2)}`;
+      document.getElementById('unpaidAmount').textContent = `¥${unpaidAmount.toFixed(2)}`;
 
       renderStatusStats();
     }
@@ -674,7 +798,7 @@
       const rows = filteredRecords || [];
 
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="empty-state"><td colspan="16">暂无数据（可能被筛选条件过滤）</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-state"><td colspan="18">暂无数据（可能被筛选条件过滤）</td></tr>`;
         updateStats();
         return;
       }
@@ -698,6 +822,7 @@
             <td>${statusBadge(r.status)}</td>
             <td>${Number(r.quantity || 0)}</td>
             <td>¥${Number(r.cost_price || 0).toFixed(2)}</td>
+            <td>¥${Number(r.shipping_fee || 0).toFixed(2)}</td>
             <td>¥${d.totalCost.toFixed(2)}</td>
             <td>${escapeHtml(r.payment_method || '自付')}</td>
             <td>${escapeHtml(r.sell_date || '')}</td>
@@ -705,6 +830,7 @@
             <td>${totalSellText}</td>
             <td class="${profitClass}">${profitText}</td>
             <td>${profitRateText}</td>
+            <td>${paymentStatusBadge(r.is_paid_back)}</td>
             <td>
               <button class="btn btn-danger" onclick="editRecord('${r.id}')">编辑</button>
               <button class="btn btn-danger" onclick="deleteRecord('${r.id}')" style="margin-top: 4px;">删除</button>
@@ -726,7 +852,6 @@
       try {
         const Purchase = AV.Object.extend('purchases');
         
-        // 兼容新老数据：先查 owner，再查 user_id（老数据没有 owner）
         const query1 = new AV.Query(Purchase);
         query1.equalTo('owner', currentUser);
         
@@ -750,9 +875,11 @@
             status: item.get('status') || '运输中',
             quantity: item.get('quantity') || 0,
             cost_price: item.get('cost_price') || 0,
+            shipping_fee: item.get('shipping_fee') || 0,
             payment_method: item.get('payment_method') || '自付',
             sell_date: item.get('sell_date') || '',
             sell_price: (sp === undefined ? null : sp),
+            is_paid_back: item.get('is_paid_back') || '否',
             remark: item.get('remark') || ''
           };
         });
@@ -778,12 +905,14 @@
 
       const quantity = parseInt(document.getElementById('quantity').value, 10) || 0;
       const cost_price = parseFloat(document.getElementById('costPrice').value) || 0;
+      const shipping_fee = parseFloat(document.getElementById('shippingFee').value) || 0;
       const payment_method = document.getElementById('paymentMethod').value || '自付';
 
       const sell_date = document.getElementById('sellDate').value || '';
       const sellPriceInput = document.getElementById('sellPrice').value;
       const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
 
+      const is_paid_back = document.getElementById('isPaidBack').value || '否';
       const remark = document.getElementById('remark').value;
 
       if (!buy_date || !buy_platform || !quantity || !cost_price) {
@@ -805,9 +934,11 @@
         record.set('status', status);
         record.set('quantity', quantity);
         record.set('cost_price', Number(cost_price.toFixed(2)));
+        record.set('shipping_fee', Number(shipping_fee.toFixed(2)));
         record.set('payment_method', payment_method);
         record.set('sell_date', sell_date);
         record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
+        record.set('is_paid_back', is_paid_back);
         record.set('remark', remark);
         
         await record.save();
@@ -821,9 +952,11 @@
         document.getElementById('status').value = '运输中';
         document.getElementById('quantity').value = 1;
         document.getElementById('costPrice').value = '';
+        document.getElementById('shippingFee').value = '';
         document.getElementById('paymentMethod').value = '自付';
         document.getElementById('sellDate').value = '';
         document.getElementById('sellPrice').value = '';
+        document.getElementById('isPaidBack').value = '否';
         document.getElementById('remark').value = '';
 
         showMsg('✓ 记录已添加，正在刷新...');
@@ -846,9 +979,11 @@
       document.getElementById('editStatus').value = record.status || '运输中';
       document.getElementById('editQuantity').value = record.quantity || 1;
       document.getElementById('editCostPrice').value = record.cost_price ?? 0;
+      document.getElementById('editShippingFee').value = record.shipping_fee ?? 0;
       document.getElementById('editPaymentMethod').value = record.payment_method || '自付';
       document.getElementById('editSellDate').value = record.sell_date || '';
       document.getElementById('editSellPrice').value = record.sell_price ?? '';
+      document.getElementById('editIsPaidBack').value = record.is_paid_back || '否';
       document.getElementById('editRemark').value = record.remark || '';
       document.getElementById('editModal').classList.add('active');
     }
@@ -862,6 +997,7 @@
 
       const sellPriceInput = document.getElementById('editSellPrice').value;
       const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
+      const shipping_fee = parseFloat(document.getElementById('editShippingFee').value) || 0;
 
       try {
         const Purchase = AV.Object.extend('purchases');
@@ -875,9 +1011,11 @@
         record.set('status', document.getElementById('editStatus').value || '运输中');
         record.set('quantity', quantity);
         record.set('cost_price', Number(cost_price.toFixed(2)));
+        record.set('shipping_fee', Number(shipping_fee.toFixed(2)));
         record.set('payment_method', document.getElementById('editPaymentMethod').value || '自付');
         record.set('sell_date', document.getElementById('editSellDate').value || '');
         record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
+        record.set('is_paid_back', document.getElementById('editIsPaidBack').value || '否');
         record.set('remark', document.getElementById('editRemark').value);
 
         await record.save();
@@ -955,12 +1093,11 @@
         filteredRecords = [];
         renderTable();
         setLoggedInUI(null);
-        // 清空所有筛选条件
         document.getElementById('filterStatus').value = '全部';
         document.getElementById('filterPlatform').value = '全部';
         document.getElementById('filterSold').value = '全部';
+        document.getElementById('filterPaymentStatus').value = '全部';
         document.getElementById('filterKeyword').value = '';
-        // 清空登录表单
         document.getElementById('authEmail').value = '';
         document.getElementById('authPassword').value = '';
       } catch (err) {
@@ -973,7 +1110,7 @@
       const rows = filteredRecords || [];
       if (rows.length === 0) return alert('没有数据可导出');
 
-      const headers = ['购买日期', '平台', '货号', '商品描述', '库存状态', '件数', '单件成本', '总成本', '付款方式', '出售日期', '单件售出价', '总售出价', '利润', '利润率', '备注'];
+      const headers = ['购买日期', '平台', '货号', '商品描述', '库存状态', '件数', '单件成本', '运费', '总成本', '付款方式', '出售日期', '单件售出价', '总售出价', '利润', '利润率', '是否已回款', '备注'];
       const csv = [headers.join('\t')];
 
       rows.forEach(r => {
@@ -986,6 +1123,7 @@
           r.status || '',
           r.quantity || 0,
           r.cost_price || 0,
+          r.shipping_fee || 0,
           d.totalCost.toFixed(2),
           r.payment_method || '自付',
           r.sell_date || '',
@@ -993,6 +1131,7 @@
           d.totalSell !== null ? d.totalSell.toFixed(2) : '',
           d.profit !== null ? d.profit.toFixed(2) : '',
           d.profitRate !== null ? d.profitRate.toFixed(2) : '',
+          r.is_paid_back || '否',
           r.remark || ''
         ];
         csv.push(row.join('\t'));
@@ -1051,9 +1190,11 @@
           record.set('status', row['库存状态'] || '运输中');
           record.set('quantity', parseInt(row['件数'], 10) || 0);
           record.set('cost_price', parseFloat(row['单件成本']) || 0);
+          record.set('shipping_fee', parseFloat(row['运费']) || 0);
           record.set('payment_method', row['付款方式'] || '自付');
           record.set('sell_date', row['出售日期'] || '');
           record.set('sell_price', row['单件售出价'] ? parseFloat(row['单件售出价']) : null);
+          record.set('is_paid_back', row['是否已回款'] || '否');
           record.set('remark', row['备注'] || '');
 
           await record.save();
@@ -1071,12 +1212,8 @@
     // ========== 初始化 ==========
     console.log('🚀 应用正在初始化...');
     
-    // 购买日期默认今天
     document.getElementById('buyDate').valueAsDate = new Date();
-    // 售出日期保持空（未出售）
     document.getElementById('sellDate').value = '';
-
-    // 清空登录表单
     document.getElementById('authEmail').value = '';
     document.getElementById('authPassword').value = '';
 
@@ -1119,15 +1256,13 @@
 
     document.getElementById('btnSaveRecord').addEventListener('click', saveRecord);
 
-    // 过滤器自动触发
-    ['filterStatus','filterPlatform','filterSold','filterKeyword'].forEach(id => {
+    ['filterStatus','filterPlatform','filterSold','filterPaymentStatus','filterKeyword'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.addEventListener('input', applyFilters);
       el.addEventListener('change', applyFilters);
     });
 
-    // 暴露全局函数（给表格里的onclick用）
     window.editRecord = editRecord;
     window.deleteRecord = deleteRecord;
 
