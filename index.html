@@ -287,14 +287,6 @@
         </div>
 
         <div class="form-group">
-          <label>是否已回款</label>
-          <select id="isPaidBack">
-            <option value="否">否</option>
-            <option value="是">是</option>
-          </select>
-        </div>
-
-        <div class="form-group">
           <label>备注</label>
           <input type="text" id="remark" placeholder="其他说明" />
         </div>
@@ -334,9 +326,9 @@
             </div>
           </div>
 
-          <!-- 新增：回款统计 -->
+          <!-- 新增：回款统计 - 参考"已打款"状态 -->
           <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #eee;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 12px; font-weight: 600;">📮 回款统计（筛选后）</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 12px; font-weight: 600;">📮 回款统计（基于"已打款"状态，筛选后）</div>
             <div class="stats-grid">
               <div class="stat-box positive">
                 <div class="stat-box-title">已回款笔数</div>
@@ -418,8 +410,8 @@
             <label>回款状态</label>
             <select id="filterPaymentStatus">
               <option value="全部">全部</option>
-              <option value="已回款">已回款</option>
-              <option value="未回款">未回款</option>
+              <option value="已回款">已回款（已打款）</option>
+              <option value="未回款">未回款（非已打款）</option>
             </select>
           </div>
 
@@ -457,13 +449,12 @@
                 <th>总售出价</th>
                 <th>利润</th>
                 <th>利润率</th>
-                <th>回款状态</th>
                 <th style="width: 120px;">操作</th>
               </tr>
             </thead>
             <tbody id="tableBody">
               <tr class="empty-state">
-                <td colspan="18">暂无数据，添加第一条记录吧</td>
+                <td colspan="17">暂无数据，添加第一条记录吧</td>
               </tr>
             </tbody>
           </table>
@@ -577,14 +568,6 @@
             <input type="number" id="editSellPrice" step="0.01" min="0" />
           </div>
 
-          <div class="form-group">
-            <label>是否已回款</label>
-            <select id="editIsPaidBack">
-              <option value="否">否</option>
-              <option value="是">是</option>
-            </select>
-          </div>
-
           <div class="form-group" style="grid-column: 1 / -1;">
             <label>备注</label>
             <input type="text" id="editRemark" />
@@ -663,13 +646,6 @@
       return `<span class="badge">${escapeHtml(s)}</span>`;
     }
 
-    function paymentStatusBadge(isPaidBack) {
-      const status = (isPaidBack || '否').trim();
-      const bgColor = status === '是' ? '#d4edda' : '#fff3cd';
-      const textColor = status === '是' ? '#155724' : '#856404';
-      return `<span style="background: ${bgColor}; color: ${textColor}; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #ddd; white-space: nowrap;">${status === '是' ? '✓ 已回款' : '✗ 未回款'}</span>`;
-    }
-
     // ========== 筛选 ==========
     function applyFilters() {
       const status = document.getElementById('filterStatus').value;
@@ -686,8 +662,9 @@
         if (sold === '已售出' && !hasSell) return false;
         if (sold === '未售出' && hasSell) return false;
 
+        // 回款状态基于库存状态"已打款"
         if (paymentStatus !== '全部') {
-          const isPaid = (r.is_paid_back || '否') === '是';
+          const isPaid = (r.status || '运输中') === '已打款';
           if (paymentStatus === '已回款' && !isPaid) return false;
           if (paymentStatus === '未回款' && isPaid) return false;
         }
@@ -736,7 +713,7 @@
       }).join('');
     }
 
-    // ========== 统计（包括回款统计）==========
+    // ========== 统计（包括回款统计 - 基于"已打款"状态）==========
     function updateStats() {
       const rows = filteredRecords || [];
 
@@ -764,8 +741,8 @@
         if (d.profit !== null) totalProfit += d.profit;
         if (d.profitRate !== null) { profitRateSum += d.profitRate; profitRateCount++; }
 
-        // 回款统计
-        const isPaid = (r.is_paid_back || '否') === '是';
+        // 回款统计：基于库存状态"已打款"
+        const isPaid = (r.status || '运输中') === '已打款';
         const saleAmount = d.totalSell || 0;
         if (isPaid) {
           paidCount++;
@@ -798,7 +775,7 @@
       const rows = filteredRecords || [];
 
       if (rows.length === 0) {
-        tbody.innerHTML = `<tr class="empty-state"><td colspan="18">暂无数据（可能被筛选条件过滤）</td></tr>`;
+        tbody.innerHTML = `<tr class="empty-state"><td colspan="17">暂无数据（可能被筛选条件过滤）</td></tr>`;
         updateStats();
         return;
       }
@@ -830,7 +807,6 @@
             <td>${totalSellText}</td>
             <td class="${profitClass}">${profitText}</td>
             <td>${profitRateText}</td>
-            <td>${paymentStatusBadge(r.is_paid_back)}</td>
             <td>
               <button class="btn btn-danger" onclick="editRecord('${r.id}')">编辑</button>
               <button class="btn btn-danger" onclick="deleteRecord('${r.id}')" style="margin-top: 4px;">删除</button>
@@ -879,7 +855,6 @@
             payment_method: item.get('payment_method') || '自付',
             sell_date: item.get('sell_date') || '',
             sell_price: (sp === undefined ? null : sp),
-            is_paid_back: item.get('is_paid_back') || '否',
             remark: item.get('remark') || ''
           };
         });
@@ -912,7 +887,6 @@
       const sellPriceInput = document.getElementById('sellPrice').value;
       const sell_price = sellPriceInput === '' ? null : (parseFloat(sellPriceInput) || null);
 
-      const is_paid_back = document.getElementById('isPaidBack').value || '否';
       const remark = document.getElementById('remark').value;
 
       if (!buy_date || !buy_platform || !quantity || !cost_price) {
@@ -938,7 +912,6 @@
         record.set('payment_method', payment_method);
         record.set('sell_date', sell_date);
         record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
-        record.set('is_paid_back', is_paid_back);
         record.set('remark', remark);
         
         await record.save();
@@ -956,7 +929,6 @@
         document.getElementById('paymentMethod').value = '自付';
         document.getElementById('sellDate').value = '';
         document.getElementById('sellPrice').value = '';
-        document.getElementById('isPaidBack').value = '否';
         document.getElementById('remark').value = '';
 
         showMsg('✓ 记录已添加，正在刷新...');
@@ -983,7 +955,6 @@
       document.getElementById('editPaymentMethod').value = record.payment_method || '自付';
       document.getElementById('editSellDate').value = record.sell_date || '';
       document.getElementById('editSellPrice').value = record.sell_price ?? '';
-      document.getElementById('editIsPaidBack').value = record.is_paid_back || '否';
       document.getElementById('editRemark').value = record.remark || '';
       document.getElementById('editModal').classList.add('active');
     }
@@ -1015,7 +986,6 @@
         record.set('payment_method', document.getElementById('editPaymentMethod').value || '自付');
         record.set('sell_date', document.getElementById('editSellDate').value || '');
         record.set('sell_price', sell_price === null ? null : Number(sell_price.toFixed(2)));
-        record.set('is_paid_back', document.getElementById('editIsPaidBack').value || '否');
         record.set('remark', document.getElementById('editRemark').value);
 
         await record.save();
@@ -1110,7 +1080,7 @@
       const rows = filteredRecords || [];
       if (rows.length === 0) return alert('没有数据可导出');
 
-      const headers = ['购买日期', '平台', '货号', '商品描述', '库存状态', '件数', '单件成本', '运费', '总成本', '付款方式', '出售日期', '单件售出价', '总售出价', '利润', '利润率', '是否已回款', '备注'];
+      const headers = ['购买日期', '平台', '货号', '商品描述', '库存状态', '件数', '单件成本', '运费', '总成本', '付款方式', '出售日期', '单件售出价', '总售出价', '利润', '利润率', '备注'];
       const csv = [headers.join('\t')];
 
       rows.forEach(r => {
@@ -1131,7 +1101,6 @@
           d.totalSell !== null ? d.totalSell.toFixed(2) : '',
           d.profit !== null ? d.profit.toFixed(2) : '',
           d.profitRate !== null ? d.profitRate.toFixed(2) : '',
-          r.is_paid_back || '否',
           r.remark || ''
         ];
         csv.push(row.join('\t'));
@@ -1194,7 +1163,6 @@
           record.set('payment_method', row['付款方式'] || '自付');
           record.set('sell_date', row['出售日期'] || '');
           record.set('sell_price', row['单件售出价'] ? parseFloat(row['单件售出价']) : null);
-          record.set('is_paid_back', row['是否已回款'] || '否');
           record.set('remark', row['备注'] || '');
 
           await record.save();
